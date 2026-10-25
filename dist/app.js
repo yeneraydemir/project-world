@@ -125,7 +125,7 @@ function edit(col,record=null,pref={}){
   basic=inp('firstName','Adı',r.firstName,'text','maxlength="50"')+inp('lastName','Soyadı',r.lastName,'text','maxlength="50"')+sel('role','Görev / uzmanlık',D.ROLES.map(x=>[x,x]),r.role)+sel('authority','Yetki ve görünüm',Object.entries(D.AUTH),r.authority);
   advanced=sel('buildingId','Yapı ataması',options('buildings'),r.buildingId)+sel('containerId','Konaklama konteyneri',options('containers'),r.containerId)+inp('shift','Vardiya',r.shift)+sel('status','Çalışan durumu',[['active','Aktif'],['off','İzinli']],r.status);
  }else if(col==='vehicles'){
-  r={plate:'',type:domain()==='business'?'semi':'mixer',driverId:'',buildingId:'',capacity:24,status:'active',...r};
+  r={plate:'',type:domain()==='business'?'semi':'mixer',driverId:'',buildingId:'',capacity:domain()==='business'?24:8,status:'active',...r};
   basic=inp('plate','Plaka',r.plate,'text','maxlength="20"')+sel('type','Araç türü',Object.entries(D.VEHICLES),r.type)+sel('driverId','Sürücü / operatör',options('workers'),r.driverId)+inp('capacity','Kapasite (palet / sınıf; mikserde m³)',r.capacity,'number','min="1" max="1000"');
   advanced=sel('buildingId','Yapı ataması',options('buildings'),r.buildingId)+sel('status','Araç durumu',[['active','Aktif'],['maintenance','Bakımda']],r.status);
  }else if(col==='containers'){

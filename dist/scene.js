@@ -13,9 +13,9 @@ function person(parent,x,z,authority='worker'){
 }
 function vehicle(parent,type,color='#d0aa68'){
  const g=group(parent),wheels=[];box(g,6,.5,2.4,0,.78,0,'#364a4d');box(g,1.9,1.75,2.45,2.1,1.78,0,color);box(g,.05,.72,2.05,3.07,2.04,0,'#729b9e');box(g,1.25,.7,.04,2.05,2.02,1.24,'#729b9e');box(g,1.25,.7,.04,2.05,2.02,-1.24,'#729b9e');
- for(const x of [-2,-.8,2.15])for(const z of [-1.26,1.26]){const m=cyl(g,.49,.49,.29,x,.57,z,'#293c3e');m.rotation.x=Math.PI/2;wheels.push(m);}
+ for(const x of [-2,-.8,2.15])for(const z of [-1.26,1.26]){const m=cyl(g,.49,.49,.29,x,.57,z,'#293c3e');m.rotation.x=Math.PI/2;cyl(m,.18,.18,.31,0,0,0,'#b5b8a5');box(m,.1,.32,.76,0,0,0,'#8e9a8c');wheels.push(m);}
  let spin=null;
- if(type==='mixer'){const holder=group(g,-.8,1.9,0);holder.rotation.z=-.16;spin=group(holder);const drum=cyl(spin,.8,1.05,3,0,0,0,'#dedbd0',18);drum.rotation.z=Math.PI/2;for(const x of [-.6,.5]){const band=cyl(spin,.98,.98,.16,x,0,0,'#b39156',18);band.rotation.z=Math.PI/2;}box(g,1.3,.15,.6,-3.3,1,0,'#8c958d');}
+ if(type==='mixer'){const holder=group(g,-.8,1.9,0);holder.rotation.z=-.16;spin=group(holder);const drum=cyl(spin,.8,1.05,3,0,0,0,'#dedbd0',18);drum.rotation.z=Math.PI/2;box(spin,2.6,.08,.25,0,.88,0,'#b69b5f');for(const x of [-.6,.5]){const band=cyl(spin,.98,.98,.16,x,0,0,'#b39156',18);band.rotation.z=Math.PI/2;}box(g,1.3,.15,.6,-3.3,1,0,'#8c958d');}
  else if(type==='excavator'){box(g,3.6,1.2,2.3,-.8,1.65,0,'#dbb355');box(g,2,.35,.45,-2.3,3.2,0,'#d3a14b').rotation.z=-.65;box(g,2.5,.35,.45,-3.7,2.4,0,'#d3a14b').rotation.z=.8;box(g,.75,.65,.9,-4.5,1.1,0,'#506263');}
  else{box(g,4,1.5,2.4,-1.2,1.7,0,type==='semi'?'#b7c5bb':'#a8b49d');box(g,4.1,.15,2.5,-1.2,2.5,0,'#dce1cf');}
  return {g,wheels,spin,type};

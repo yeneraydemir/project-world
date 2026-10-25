@@ -15,7 +15,8 @@
 ## Doğrulama
 - 18 veri ve davranış testi geçti.
 - Sözdizimi kontrolü ve yerel Three.js varlık derlemesi geçti.
-- Tarayıcı görsel/etkileşim kontrolü henüz tamamlanmadı.
+- Canlı yayında Chrome ile gerçek WebGL sahnesi, şantiye/villa geçişi, çalışan/yetki kaydı, araç/sürücü ataması, geri alma, sevkiyat miktarı güncellemesi, 390 px mobil düzen ve takvim 2× ilerlemesi kontrol edildi. Konsolda uygulama hatası görülmedi.
+- Dahili önizleme adresi bulut tarayıcısında engellendi; görsel kontrol yayımlanan sürümde yapıldı.
 
 ## Önceki kapsamla farklar / sonraki işler
 - Eski dosyalar kurtarılamadığı için görseller ve veri şeması yeniden oluşturuldu. Eski v1 dünya dosyası içe aktarma şu an desteklenmez; v2 dosyaları kabul edilir.
