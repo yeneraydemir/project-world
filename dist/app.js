@@ -1,0 +1,182 @@
+import * as D from './data.js';
+import {WorldScene} from './scene.js';
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>Number(n).toLocaleString('tr-TR'),money=n=>fmt(n)+' ₺',KEY='project-world-v2';
+const icons={buildings:'▤',landscape:'♧',containers:'▱',workers:'♙',vehicles:'♧',tasks:'☷',materials:'◇',jobs:'⇄',boundary:'⌗'};
+let root,loadIssue='',scene=null,mode='edit',draft=null,view='buildings',group='area',selected=null,detailMode=null,search='',interior=null,route=false,plotting=false,rate=0,cursor=0,lastWrite=0,lastUI=0,history=[],scenarioHistory=[],demand=100,toastTimer;
+try{const saved=localStorage.getItem(KEY);root=saved?D.validate(JSON.parse(saved)):D.initial();}catch(e){root=D.initial();loadIssue='Önceki kayıt açılamadı: '+e.message;try{const old=localStorage.getItem(KEY);if(old)localStorage.setItem(KEY+'-recovery',old);}catch{}}
+const world=()=>mode==='scenario'?draft:root,project=()=>world().projects.find(p=>p.id===world().active),domain=()=>project().domain;
+const selectedRecord=()=>selected?project()[selected.col]?.find(r=>r.id===selected.id):null;
+function toast(s){clearTimeout(toastTimer);$('#toast').textContent=s;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,5000);}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(root));$('#save-state').textContent='Tarayıcıya kaydedildi';return true;}catch{$('#save-state').textContent='Kayıt yapılamadı';toast('Tarayıcı kaydı yapılamadı. Dosya menüsünden JSON yedeği indir.');return false;}}
+function setWorld(w){if(mode==='scenario')draft=w;else root=w;}
+function mutate(fn){const before=D.clone(world());try{fn(project());const valid=D.validate(world());setWorld(valid);const h=mode==='scenario'?scenarioHistory:history;h.push(before);if(h.length>40)h.shift();if(mode!=='scenario')persist();render();return true;}catch(e){setWorld(before);toast(e.message);const err=$('#form-error');if(err)err.textContent=e.message;return false;}}
+function undo(){const h=mode==='scenario'?scenarioHistory:history;if(!h.length)return toast('Geri alınacak değişiklik yok.');setWorld(h.pop());selected=null;detailMode=null;rate=0;if(mode!=='scenario')persist();render();toast('Son değişiklik geri alındı.');}
+function chooseProject(key){cancelPlot();rate=0;interior=null;selected=null;detailMode=null;route=false;search='';$('#search').value='';root.active=key;mode='edit';draft=null;view='buildings';group='area';persist();render();scene?.overview();}
+function select(record){cancelPlot();selected=record;detailMode=null;view=record.col;group=['buildings','landscape','containers'].includes(view)?'area':['workers','vehicles'].includes(view)?'team':'work';$('#browser').classList.remove('open');render();const r=selectedRecord();if(r?.x!=null)scene?.focus(r);}
+function groups(){return {area:{name:'Yapı ve çevre',symbol:'▤',views:['buildings','landscape','containers']},team:{name:'Ekip ve araçlar',symbol:'♙',views:['workers','vehicles']},work:{name:'İş takibi',symbol:'☷',views:domain()==='business'?['jobs','tasks','materials','alerts']:['tasks','materials','alerts']}};}
+function tab(next){view=next;selected=null;detailMode=null;search='';$('#search').value='';render();}
+function render(){
+ const p=project();cursor=D.date(p.cursor);const choices=root.projects.filter(x=>x.domain===p.domain);
+ $('#project').innerHTML=choices.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join('');$('#project').value=p.id;
+ $('[data-domain="construction"]').classList.toggle('active',p.domain==='construction');$('[data-domain="business"]').classList.toggle('active',p.domain==='business');
+ $('#project-meta').textContent=p.domain==='business'?'Operasyon merkezi · Şematik yerleşke':'60 × 60 metre · 3.600 m² arazi';
+ $('#business-modes').hidden=p.domain!=='business';$('#new-land').hidden=p.domain!=='construction';
+ document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+ $('#scene-kicker').textContent=mode==='scenario'?'BAĞIMSIZ SENARYO':p.domain==='business'?'İŞLETME DÜNYASI':'ŞANTİYE DÜNYASI';
+ $('#scene-title').textContent=p.name;$('#scene-copy').textContent=interior?'Depo içindesin. Raf ve palet düzenini oluştur.':mode==='scenario'?'Senaryo kopyasını düzenle; ana dünya bundan etkilenmez.':'Bir nesne seç, bilgilerini ve bağlantılarını keşfet.';
+ $('#exit-interior').hidden=!interior;$('#calendar-toggle').hidden=p.domain==='business';$('#summary-toggle').textContent=mode==='scenario'?'Senaryo özeti':'Proje özeti';
+ const gs=groups();if(!gs[group].views.includes(view))view=gs[group].views[0];
+ $('#groups').innerHTML=Object.entries(gs).map(([key,g])=>'<button data-group="'+key+'" class="'+(group===key?'active':'')+'" aria-pressed="'+(group===key)+'"><span>'+g.symbol+'</span>'+g.name+'</button>').join('');
+ $('#groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{group=b.dataset.group;tab(groups()[group].views[0]);});
+ $('#views').innerHTML=gs[group].views.map(key=>'<button data-view="'+key+'" class="'+(view===key?'active':'')+'" aria-pressed="'+(view===key)+'">'+(D.LABELS[key]||'Uyarılar')+'</button>').join('');
+ $('#views').querySelectorAll('button').forEach(b=>b.onclick=()=>tab(b.dataset.view));
+ renderRecords();renderStats();renderDetail();scene?.rebuild(p,{interior,selected,route});updateClockLabel();
+ $('#undo').disabled=!(mode==='scenario'?scenarioHistory:history).length;
+}
+function rowText(col,r){if(col==='buildings')return r.w+' × '+r.d+' m · '+r.floors+' kat · '+r.end.slice(0,4);if(col==='workers')return r.role+' · '+D.AUTH[r.authority];if(col==='vehicles')return D.VEHICLES[r.type]+' · '+(project().workers.find(w=>w.id===r.driverId)?.name||'Sürücü atanmadı');if(col==='containers')return project().workers.filter(w=>w.containerId===r.id).length+' / '+r.capacity+' kişi';if(col==='landscape')return D.LAND[r.type]+' · '+r.w+' × '+r.d+' m';if(col==='tasks')return D.STATUS[r.status]+' · '+r.due;if(col==='materials')return fmt(r.stock)+' '+r.unit+' · Minimum '+fmt(r.minimum);if(col==='jobs')return D.JOBS[r.type]+' · '+r.loaded+' / '+r.quantity+' · '+D.STATUS[r.status];return '';}
+function renderRecords(){
+ const p=project(),out=$('#records'),scroll=out.scrollTop;$('#list-label').textContent=(D.LABELS[view]||'Uyarılar').toLocaleUpperCase('tr-TR');
+ if(view==='alerts'){const a=D.alerts(p,cursor);$('#list-count').textContent=a.length;out.innerHTML=a.map(s=>'<div class="alert">'+esc(s)+'</div>').join('')||'<div class="empty"><strong>Her şey yolunda</strong>Bu tarihte açık uyarı yok.</div>';return;}
+ const rows=p[view].filter(r=>!search||JSON.stringify(r).toLocaleLowerCase('tr-TR').includes(search));$('#list-count').textContent=rows.length;
+ out.innerHTML=rows.map(r=>'<button class="record '+(selected?.id===r.id?'active':'')+'" data-id="'+esc(r.id)+'"><span class="symbol">'+icons[view]+'</span><span><strong>'+esc(r.name)+'</strong><small>'+esc(rowText(view,r))+'</small></span>'+(view==='buildings'?'<em>%'+D.phase(r,cursor).percent+'</em>':'')+'</button>').join('')||'<div class="empty"><strong>'+(search?'Sonuç bulunamadı':'Henüz kayıt yok')+'</strong>'+(search?'Başka bir ad veya plaka ara.':'İlk kaydını + Ekle ile oluştur.')+'</div>';
+ out.querySelectorAll('button').forEach(b=>b.onclick=()=>select({col:view,id:b.dataset.id}));out.scrollTop=scroll;
+}
+function renderStats(){const p=project(),m=D.metrics(p),data=p.domain==='business'?[['Tesis',p.buildings.length,''],['Kapasite',m.capacity,'palet'],['Üretim',m.production,'/sa']]:[['Yapı',p.buildings.length,''],['Aktif ekip',p.workers.filter(w=>w.status==='active').length,''],['Araç',p.vehicles.length,'']];$('#stats').innerHTML=data.map(([l,n,u])=>'<div class="stat"><span>'+l+'</span><strong>'+fmt(n)+'</strong>'+(u?'<small>'+u+'</small>':'')+'</div>').join('');}
+const kv=rows=>'<dl class="kv">'+rows.map(([a,b])=>'<div><dt>'+esc(a)+'</dt><dd>'+esc(b??'Atanmadı')+'</dd></div>').join('')+'</dl>';
+const button=(label,action,css='')=>'<button class="wide '+css+'" data-action="'+action+'">'+esc(label)+'</button>';
+const linkRecord=(col,r,label)=>r?'<button class="wide" data-link-col="'+col+'" data-link-id="'+esc(r.id)+'">'+esc(label||r.name)+' ↗</button>':'';
+function renderDetail(){
+ const p=project(),r=selectedRecord(),el=$('#detail'),open=Boolean(r||detailMode);$('#inspector').hidden=!open;if(!open)return;
+ let html='';$('#detail-kicker').textContent=detailMode==='calendar'?'PLANLAMA':mode==='scenario'?'SENARYO KOPYASI':'KAYIT DETAYI';
+ if(detailMode==='calendar'){
+  const bounds=D.range(p);html='<h2>Takvim ve hız</h2><p class="detail-copy">Seçtiğin tarihte yapının durumunu gör. Planı hızlandırarak baştan sona izleyebilirsin.</p><label>Görünüm tarihi<input id="plan-date" type="date" min="'+D.iso(bounds.start)+'" max="'+D.iso(bounds.end)+'" value="'+p.cursor+'"></label><label>Plan ilerlemesi<select id="plan-rate">'+[[0,'Seçili tarihte kal'],[.5,'0,5× · 15 gün/sn'],[1,'1× · 30 gün/sn'],[2,'2× · 60 gün/sn'],[5,'5× · 150 gün/sn']].map(([n,s])=>'<option value="'+n+'" '+(rate===n?'selected':'')+'>'+s+'</option>').join('')+'</select></label>'+button('Yapımı başlangıçtan izle','animate','gold')+'<p class="detail-copy">Doğrusal plan senaryosudur; hava, ekip verimi veya gerçek şantiye gecikmelerini hesaplamaz.</p>';
+ }else if(detailMode==='summary'||detailMode==='scenario'){
+  const total=p.buildings.reduce((n,b)=>n+b.budget,0);html='<span class="tag">'+(mode==='scenario'?'Bağımsız senaryo':'Proje özeti')+'</span><h2>'+esc(p.name)+'</h2>'+kv([['Yapı',p.buildings.length],['Çalışan',p.workers.length],['Araç',p.vehicles.length],['Konaklama',p.containers.length+' konteyner'],['Açık görev',p.tasks.filter(t=>t.status!=='done').length],['Bütçe',money(total)],['Plan bitişi',D.iso(D.range(p).end)]]);
+  if(mode==='scenario'){const base=D.metrics(root.projects.find(q=>q.id===p.id)),now=D.metrics(p);html+='<div class="scenario-card">Ana dünya: '+base.capacity+' palet / '+base.production+' adet/sa<br>Senaryo: '+now.capacity+' palet / '+now.production+' adet/sa</div><label>Talep senaryosu: <span id="demand-value">%'+demand+'</span><input id="demand" type="range" min="50" max="200" value="'+demand+'"></label><p class="detail-copy" id="scenario-result">'+scenarioText()+'</p>'+button('Senaryoyu sıfırla','reset-scenario');}
+  else html+=button('Parsel sınırı ve giriş kapısı','boundary');
+  const a=D.alerts(p,cursor);html+='<h3>Dikkat gerektirenler</h3>'+(a.map(s=>'<div class="alert">'+esc(s)+'</div>').join('')||'<p class="detail-copy">Açık uyarı yok.</p>');
+ }else if(r){
+  html='<span class="tag">'+esc(D.LABELS[selected.col])+'</span><h2>'+esc(r.name)+'</h2>';
+  if(selected.col==='buildings'){const ph=D.phase(r,cursor),m=D.estimate(r);html+='<div class="progress-label"><span id="phase-stage">'+ph.stage+'</span><strong id="phase-percent">%'+ph.percent+'</strong></div><div class="bar"><span id="phase-bar" style="width:'+ph.percent+'%"></span></div>'+kv([['Tür',D.KINDS[r.kind]],['Taban',r.w+' × '+r.d+' m'],['Kat',r.floors],['Başlangıç',r.start],['Bitiş',r.end],['Bütçe',money(r.budget)],['Konum',r.x+' / '+r.z+' m']])+'<h3>Kaba malzeme senaryosu</h3>'+kv([['Toplam kat alanı',m.area+' m²'],['Beton',m.concrete+' m³'],['Çelik',m.steel+' ton'],['Tuğla',m.brick+' adet']])+'<p class="detail-copy">Örnek katsayılara dayanır; stok tüketmez ve mühendislik keşfi değildir.</p>';if(r.kind==='warehouse')html+=button('Depoya gir · Raf ve palet düzenle','enter','gold');html+=button('Yapıyı çoğalt','duplicate');}
+  else if(selected.col==='workers'){const b=p.buildings.find(b=>b.id===r.buildingId),c=p.containers.find(c=>c.id===r.containerId),v=p.vehicles.find(v=>v.driverId===r.id);html+=kv([['Uzmanlık',r.role],['Yetki',D.AUTH[r.authority]],['Görünüm',r.authority==='chief'?'Beyaz baret / mavi yelek':r.authority==='leader'?'Mavi baret / yeşil yelek':'Sarı baret / turuncu yelek'],['Vardiya',r.shift],['Durum',D.STATUS[r.status]],['Yapı',b?.name],['Konaklama',c?.name]])+linkRecord('vehicles',v,'Atanmış araç · '+v?.plate);}
+  else if(selected.col==='vehicles'){const w=p.workers.find(w=>w.id===r.driverId),b=p.buildings.find(b=>b.id===r.buildingId);html+=kv([['Plaka',r.plate],['Tür',D.VEHICLES[r.type]],['Kapasite',r.capacity+(r.type==='mixer'?' m³':' palet / sınıf')],['Durum',D.STATUS[r.status]],['Yapı',b?.name],['Sürücü',w?.name]])+linkRecord('workers',w,'Araçtaki sürücü · '+w?.name)+'<p class="detail-copy">Saha hareketi temsili animasyondur. Canlı GPS bağlı değildir.</p>';}
+  else if(selected.col==='containers'){const occupants=p.workers.filter(w=>w.containerId===r.id);html+=kv([['Ölçü',r.w+' × '+r.d+' m'],['Kapasite',r.capacity+' kişi'],['Doluluk',occupants.length+' kişi'],['Konum',r.x+' / '+r.z]])+occupants.map(w=>linkRecord('workers',w)).join('');}
+  else if(selected.col==='landscape'){const b=p.buildings.find(b=>b.id===r.buildingId);html+=kv([['Tür',D.LAND[r.type]],['Ölçü',r.w+' × '+r.d+' m'],['Yükseklik / derinlik',r.h+' m'],['Bağlı yapı',b?.name],['Konum',r.x+' / '+r.z]])+(r.type==='pool'?'<p class="detail-copy">Bağlı yapının takvimine göre kazı, gövde ve su aşaması görünür.</p>':'');}
+  else if(selected.col==='tasks'){html+=kv([['Bitiş',r.due],['Sorumlu',p.workers.find(w=>w.id===r.workerId)?.name],['Yapı',p.buildings.find(b=>b.id===r.buildingId)?.name]])+'<label>Görev durumu<select id="task-status">'+Object.entries({todo:'Yapılacak',doing:'Devam ediyor',done:'Tamamlandı'}).map(([k,n])=>'<option value="'+k+'" '+(k===r.status?'selected':'')+'>'+n+'</option>').join('')+'</select></label>';}
+  else if(selected.col==='materials'){html+=kv([['Stok',fmt(r.stock)+' '+r.unit],['Minimum',fmt(r.minimum)+' '+r.unit]])+button('Malzeme girişi yap','receive','gold');}
+  else if(selected.col==='jobs'){
+   const v=p.vehicles.find(v=>v.id===r.vehicleId),b=p.buildings.find(b=>b.id===r.buildingId),dist={istanbul:453,eskisehir:234,konya:283}[r.route],segments=['Tesis çıkışı','Çevre yolu','Şehirler arası yol','Varış bağlantısı'];
+   html+=kv([['İşlem',D.JOBS[r.type]],['Durum',D.STATUS[r.status]],['Tesis',b?.name],['Yüklenen / işlenen',r.loaded+' / '+r.quantity],['Araç',v?.plate],['Örnek rota',r.route==='istanbul'?'Ankara → İstanbul':r.route==='konya'?'Ankara → Konya':'Ankara → Eskişehir'],['Yol kesimi',segments[Math.min(3,Math.floor(r.progress*4))]],['Planlanan kalan',Math.round(dist*(1-r.progress))+' km']])+linkRecord('vehicles',v);
+   if(['planned','loading'].includes(r.status))html+=button(r.type==='production'?'Üretim adımı ekle':'Yük / kabul adımı ekle','job-load','gold');
+   if(r.status==='ready')html+=button(r.type==='production'?'Üretimi tamamla':'Aracı yola çıkar','job-dispatch','gold');
+   if(r.status==='transit')html+=button('Örnek konumu %25 ilerlet','job-advance','gold');
+   html+=button(route?'Tesis görünümüne dön':'Şematik rotayı göster','route')+'<p class="detail-copy">Konum, yol ve mesafe örnek plan verisidir. Araç kendiliğinden gerçek konum bildirmez. Görünen kutular işlem adedini temsil eder.</p>';
+  }
+  html+=button('Bilgileri düzenle','edit')+button('Kaydı kaldır','remove','danger');
+ }
+ if(p.log.length&&detailMode!=='calendar')html+='<h3>Son işlemler</h3>'+p.log.slice(0,3).map(l=>'<p class="detail-copy">'+esc(l.message)+'</p>').join('');
+ el.innerHTML=html;
+ el.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>act(b.dataset.action));
+ el.querySelectorAll('[data-link-id]').forEach(b=>b.onclick=()=>select({col:b.dataset.linkCol,id:b.dataset.linkId}));
+ $('#task-status')?.addEventListener('change',e=>mutate(p=>D.put(p,'tasks',{...r,status:e.target.value})));
+ $('#plan-date')?.addEventListener('change',e=>{try{const t=D.date(e.target.value),range=D.range(p);if(t<range.start||t>range.end)throw Error('Tarih plan aralığında olmalı.');rate=0;p.cursor=e.target.value;cursor=t;persist();scene?.update(p.cursor);renderDetail();renderRecords();updateClockLabel();}catch(err){toast(err.message);renderDetail();}});
+ $('#plan-rate')?.addEventListener('change',e=>{rate=Number(e.target.value);if(rate&&cursor>=D.range(p).end){cursor=D.range(p).start;p.cursor=D.iso(cursor);}updateClockLabel();});
+ $('#demand')?.addEventListener('input',e=>{demand=Number(e.target.value);$('#demand-value').textContent='%'+demand;$('#scenario-result').textContent=scenarioText();});
+}
+function scenarioText(){const base=D.metrics(root.projects.find(q=>q.id===project().id)),now=D.metrics(project()),needed=Math.round(base.production*demand/100);return 'Talep '+needed+' adet/sa; senaryo kapasitesi '+now.production+' adet/sa. '+(now.production>=needed?'Kapasite yeterli.':'Kapasite açığı '+(needed-now.production)+' adet/sa.');}
+function act(action){
+ const p=project(),r=selectedRecord();
+ if(action==='edit')return edit(selected.col,r);
+ if(action==='remove')return confirmDialog('Kaydı kaldır?',r.name+' kaydı kaldırılacak. Geri al ile geri dönebilirsin.',()=>{if(mutate(p=>D.remove(p,selected.col,r.id))){selected=null;render();return true;}return false;});
+ if(action==='duplicate'){try{const pos=D.findSpot(p,r.w,r.d);return mutate(p=>{const x=D.put(p,'buildings',{...r,id:undefined,name:r.name+' kopyası',...pos});selected={col:'buildings',id:x.id};});}catch(e){return toast(e.message);}}
+ if(action==='enter'){interior=r.id;scene?.focus(r);render();return;}
+ if(action==='boundary')return boundaryForm();
+ if(action==='receive')return receiveForm(r);
+ if(action==='route'){route=!route;render();return;}
+ if(action.startsWith('job-'))return mutate(p=>D.stepJob(p,r.id,action.slice(4)));
+ if(action==='animate'){cursor=D.range(p).start;p.cursor=D.iso(cursor);rate=.5;renderDetail();scene?.update(p.cursor);return;}
+ if(action==='reset-scenario'){draft=D.clone(root);draft.active='business';scenarioHistory=[];selected=null;render();return;}
+}
+const inp=(name,label,value='',type='text',attrs='')=>'<label>'+esc(label)+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" required '+attrs+'></label>';
+const sel=(name,label,options,value='')=>'<label>'+esc(label)+'<select aria-label="'+esc(label)+'" name="'+name+'">'+options.map(([k,n])=>'<option value="'+esc(k)+'" '+(String(k)===String(value)?'selected':'')+'>'+esc(n)+'</option>').join('')+'</select></label>';
+const options=(collection,label='Atanmadı')=>[['',label],...project()[collection].map(r=>[r.id,r.name])];
+function modal(title,basic,advanced,onSubmit,label='Kaydet'){
+ rate=0;const d=$('#dialog');d.innerHTML='<div class="dialog-head"><span class="eyebrow">PROJECT WORLD</span><button type="button" id="dialog-close" aria-label="Pencereyi kapat">×</button></div><h2>'+esc(title)+'</h2><form id="form"><div class="form-grid">'+basic+'</div>'+(advanced?'<details class="advanced"><summary>Diğer bilgiler ve yerleşim</summary><div class="form-grid">'+advanced+'</div></details>':'')+'<p id="form-error" class="form-error" role="alert"></p><div class="form-actions"><button type="button" class="soft" id="dialog-cancel">Vazgeç</button><button class="gold" type="submit">'+esc(label)+'</button></div></form><p class="note">Saha kayıtları bu tarayıcıda saklanır. Dosya menüsünden JSON yedeği indirebilirsin.</p>';
+ $('#dialog-close').onclick=()=>d.close();$('#dialog-cancel').onclick=()=>d.close();$('#form').addEventListener('invalid',e=>{const details=e.target.closest('details');if(details)details.open=true;},true);
+ $('#form').onsubmit=e=>{e.preventDefault();try{const input=Object.fromEntries(new FormData(e.target));if(onSubmit(input)!==false)d.close();}catch(err){$('#form-error').textContent=err.message;toast(err.message);}};d.showModal();
+}
+function confirmDialog(title,copy,fn){modal(title,'<p class="detail-copy">'+esc(copy)+'</p>','',fn,'Onayla');}
+function addMenu(){const d=$('#dialog');rate=0;const list=[['buildings','Yapı / villa','Yer seç, ölçü ve kat belirle'],['pool','Havuz','Ölçü, derinlik ve yapım takvimi'],['landscape','Bahçe ve peyzaj','Çim, yol, ağaç, çit ve pergola'],['containers','Konaklama konteyneri','Kapasite ve ekip yerleşimi'],['workers','Çalışan','Ad, görev, yetki ve atamalar'],['vehicles','Araç','Plaka, sürücü ve kapasite'],['tasks','Görev','Sorumlu, yapı ve bitiş tarihi'],['materials','Malzeme','Stok ve minimum miktar'],['boundary','Parsel ve kapı','Sınır biçimi ve giriş']];if(domain()==='business')list.splice(1,0,['jobs','İşlem','Sevkiyat, üretim, tedarik ve transfer']);
+ d.innerHTML='<div class="dialog-head"><span class="eyebrow">PROJENE EKLE</span><button id="dialog-close" aria-label="Pencereyi kapat">×</button></div><h2>Ne eklemek istersin?</h2><div class="add-menu">'+list.map(([key,n,s])=>'<button data-add="'+key+'"><span class="symbol">'+(icons[key]||'◇')+'</span><span><strong>'+n+'</strong><small>'+s+'</small></span></button>').join('')+'</div>';$('#dialog-close').onclick=()=>d.close();d.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{d.close();const key=b.dataset.add;if(key==='buildings')beginPlot();else if(key==='boundary')boundaryForm();else if(key==='pool')edit('landscape',null,{type:'pool'});else edit(key);});d.showModal();
+}
+function beginPlot(){if(!scene){try{return edit('buildings',null,{...D.findSpot(project(),10,10),w:10,d:10});}catch(e){return toast(e.message);}}plotting=true;$('#plot-hint').hidden=false;$('#browser').classList.remove('open');$('#inspector').hidden=true;scene.setPlot(true);}
+function cancelPlot(){plotting=false;$('#plot-hint').hidden=true;scene?.setPlot(false);}
+function edit(col,record=null,pref={}){
+ const p=project();let r=record||{},basic='',advanced='';
+ const nums=(values,keys)=>{const result={...values};for(const k of keys)result[k]=Number(result[k]);return result;};
+ if(col==='buildings'){
+  r={name:'Yeni yapı',kind:domain()==='business'?'warehouse':'building',w:10,d:10,floors:3,x:0,z:0,budget:0,roof:'flat',color:'#c9b99e',start:'2026-10-26',end:'2028-12-31',...r,...pref};
+  const kinds=Object.entries(D.KINDS).filter(([k])=>domain()==='business'?['warehouse','factory','office'].includes(k):['building','villa','house'].includes(k));
+  basic=inp('name','Yapı adı',r.name)+sel('kind','Yapı türü',kinds,r.kind)+inp('w','En (m)',r.w,'number','min="5" max="60" step="any"')+inp('d','Boy (m)',r.d,'number','min="5" max="60" step="any"')+inp('floors','Kat sayısı',r.floors,'number','min="1" max="40" step="1"')+inp('end','Tahmini bitiş tarihi',r.end,'date');
+  advanced=inp('start','Başlangıç tarihi',r.start,'date')+inp('budget','Plan bütçesi (₺)',r.budget,'number','min="0" max="1000000000000"')+sel('roof','Çatı',Object.entries({flat:'Düz çatı',pitched:'Eğimli çatı'}),r.roof)+inp('color','Cephe rengi',r.color,'color')+inp('x','Konum X (m)',r.x,'number','min="-30" max="30" step="any"')+inp('z','Konum Z (m)',r.z,'number','min="-30" max="30" step="any"');
+ }else if(col==='workers'){
+  r={firstName:'',lastName:'',role:D.ROLES[0],authority:'worker',buildingId:'',containerId:'',shift:'08:00–17:00',status:'active',...r};
+  basic=inp('firstName','Adı',r.firstName,'text','maxlength="50"')+inp('lastName','Soyadı',r.lastName,'text','maxlength="50"')+sel('role','Görev / uzmanlık',D.ROLES.map(x=>[x,x]),r.role)+sel('authority','Yetki ve görünüm',Object.entries(D.AUTH),r.authority);
+  advanced=sel('buildingId','Yapı ataması',options('buildings'),r.buildingId)+sel('containerId','Konaklama konteyneri',options('containers'),r.containerId)+inp('shift','Vardiya',r.shift)+sel('status','Çalışan durumu',[['active','Aktif'],['off','İzinli']],r.status);
+ }else if(col==='vehicles'){
+  r={plate:'',type:domain()==='business'?'semi':'mixer',driverId:'',buildingId:'',capacity:24,status:'active',...r};
+  basic=inp('plate','Plaka',r.plate,'text','maxlength="20"')+sel('type','Araç türü',Object.entries(D.VEHICLES),r.type)+sel('driverId','Sürücü / operatör',options('workers'),r.driverId)+inp('capacity','Kapasite (palet / sınıf; mikserde m³)',r.capacity,'number','min="1" max="1000"');
+  advanced=sel('buildingId','Yapı ataması',options('buildings'),r.buildingId)+sel('status','Araç durumu',[['active','Aktif'],['maintenance','Bakımda']],r.status);
+ }else if(col==='containers'){
+  let spot={x:0,z:0};if(!record)try{spot=D.findSpot(p,6,3);}catch{}
+  r={name:'Ekip konaklama',w:6,d:3,capacity:12,...spot,...r};
+  basic=inp('name','Konteyner adı',r.name)+inp('capacity','Kapasite (kişi)',r.capacity,'number','min="1" max="100" step="1"')+inp('w','En (m)',r.w,'number','min="3" max="15" step="any"')+inp('d','Boy (m)',r.d,'number','min="2" max="8" step="any"');
+  advanced=inp('x','Konum X (m)',r.x,'number','min="-30" max="30" step="any"')+inp('z','Konum Z (m)',r.z,'number','min="-30" max="30" step="any"');
+ }else if(col==='landscape'){
+  const type=pref.type||(interior?'rack':'tree'),dims=landDefaults(type);let spot={x:0,z:0};if(!record)try{spot=D.findSpot(p,dims.w,dims.d);}catch{}
+  const parent=interior?p.buildings.find(b=>b.id===interior):null;r={type,name:D.LAND[type],...dims,...spot,buildingId:'',parentId:interior||'',...r,...pref};if(parent&&!record){r.x=parent.x;r.z=parent.z;}
+  basic=sel('type','Nesne türü',Object.entries(D.LAND).filter(([k])=>interior?['rack','pallet'].includes(k):!['rack','pallet'].includes(k)),r.type)+inp('name','Nesne adı',r.name)+inp('w','En (m)',r.w,'number','min="0.2" max="60" step="any"')+inp('d','Boy (m)',r.d,'number','min="0.2" max="60" step="any"')+inp('h','Yükseklik / havuz derinliği (m)',r.h,'number','min="0.05" max="10" step="any"')+sel('buildingId','Yapım takvimine bağla',options('buildings'),r.buildingId);
+  advanced=inp('x','Konum X (m)',r.x,'number','min="-30" max="30" step="any"')+inp('z','Konum Z (m)',r.z,'number','min="-30" max="30" step="any"');
+ }else if(col==='tasks'){
+  r={name:'',buildingId:'',workerId:'',due:'2026-12-31',status:'todo',...r};
+  basic=inp('name','Görev adı',r.name)+inp('due','Bitiş tarihi',r.due,'date')+sel('workerId','Sorumlu çalışan',options('workers'),r.workerId)+sel('buildingId','Yapı ataması',options('buildings'),r.buildingId)+sel('status','Görev durumu',[['todo','Yapılacak'],['doing','Devam ediyor'],['done','Tamamlandı']],r.status);
+ }else if(col==='materials'){
+  r={name:'',unit:'adet',stock:0,minimum:0,...r};basic=inp('name','Malzeme adı',r.name)+inp('unit','Birim',r.unit)+inp('stock','Mevcut stok',r.stock,'number','min="0" max="1000000000" step="any"')+inp('minimum','Minimum stok',r.minimum,'number','min="0" max="1000000000" step="any"');
+ }else if(col==='jobs'){
+  r={name:'',type:'shipment',buildingId:'',targetId:'',vehicleId:'',quantity:24,loaded:0,status:'planned',route:'istanbul',progress:0,...r};
+  basic=inp('name','İşlem adı',r.name)+sel('type','İşlem türü',Object.entries(D.JOBS),r.type)+sel('buildingId','Kaynak tesis',options('buildings','Tesis seç'),r.buildingId)+sel('targetId','Hedef tesis (transfer için)',options('buildings'),r.targetId)+sel('vehicleId','Atanmış araç',options('vehicles'),r.vehicleId)+inp('quantity','Miktar (palet / adet)',r.quantity,'number','min="1" max="500" step="1"');
+  advanced=sel('route','Örnek rota',[['istanbul','Ankara → İstanbul'],['eskisehir','Ankara → Eskişehir'],['konya','Ankara → Konya']],r.route);
+ }
+ if(!basic)return;
+ modal((record?'Kaydı düzenle · ':'Yeni kayıt · ')+D.LABELS[col],basic,advanced,input=>{
+  const values={...r,...nums(input,['w','d','floors','x','z','h','capacity','budget','stock','minimum','quantity'].filter(k=>Object.hasOwn(input,k)))};
+  const ok=mutate(p=>{const created=D.put(p,col,values);selected={col,id:created.id};view=col;group=['buildings','landscape','containers'].includes(col)?'area':['workers','vehicles'].includes(col)?'team':'work';detailMode=null;});return ok;
+ });
+ if(col==='buildings')$('#form [name=kind]').onchange=e=>{const f=$('#form [name=floors]');f.max=e.target.value==='house'?1:e.target.value==='villa'?4:40;if(Number(f.value)>Number(f.max))f.value=f.max;};
+ if(col==='landscape')$('#form [name=type]').onchange=e=>{const t=e.target.value,defaults=landDefaults(t);$('#form [name=name]').value=D.LAND[t];for(const k of ['w','d','h'])$('#form [name='+k+']').value=defaults[k];};
+}
+function landDefaults(type){return ({pool:{w:8,d:5,h:1.5},lawn:{w:15,d:12,h:.07},path:{w:2,d:10,h:.08},terrace:{w:8,d:6,h:.12},tree:{w:2,d:2,h:4},fence:{w:7,d:.25,h:1.4},hedge:{w:7,d:.6,h:1.2},pergola:{w:5,d:4,h:2.8},light:{w:.4,d:.4,h:3},road:{w:5,d:25,h:.06},rack:{w:4,d:1.2,h:3},pallet:{w:1.2,d:1,h:.4}})[type];}
+function boundaryForm(){const b=project().boundary;modal('Parsel sınırı ve kapı',sel('style','Sınır türü',[['fence','Bahçe çiti'],['wall','Duvar'],['hedge','Yeşil sınır'],['line','Yalnızca çizgi']],b.style)+inp('height','Sınır yüksekliği (m)',b.height,'number','min="0.5" max="3" step="0.1"')+inp('gate','Giriş genişliği (m)',b.gate,'number','min="2" max="10" step="0.5"'),'',input=>mutate(p=>{p.boundary={style:input.style,height:Number(input.height),gate:Number(input.gate)};D.log(p,'Parsel sınırı güncellendi.');}));}
+function receiveForm(record){modal('Malzeme girişi · '+record.name,inp('quantity','Giriş miktarı ('+record.unit+')',1,'number','min="0.01" max="100000000" step="any"'),'',input=>mutate(p=>D.receive(p,record.id,Number(input.quantity))));}
+function updateClockLabel(){const p=project();$('#scene-status').textContent=(mode==='scenario'?'Senaryo · ':rate?rate+'× takvim · ':'Plan görünümü · ')+new Date(cursor).toLocaleDateString('tr-TR',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});}
+function tick(dt){if(rate&&!plotting&&!$('#dialog').open){const p=project(),bounds=D.range(p);cursor=Math.min(bounds.end,cursor+dt*D.DAY*30*rate);p.cursor=D.iso(cursor);if(cursor>=bounds.end){rate=0;renderDetail();}scene?.update(p.cursor);}
+ if(performance.now()-lastUI>350){lastUI=performance.now();updateClockLabel();if(rate){const r=selectedRecord();if(selected?.col==='buildings'&&r){const ph=D.phase(r,cursor);if($('#phase-percent')){$('#phase-percent').textContent='%'+ph.percent;$('#phase-stage').textContent=ph.stage;$('#phase-bar').style.width=ph.percent+'%';}}const dateField=$('#plan-date');if(dateField&&document.activeElement!==dateField)dateField.value=project().cursor;renderRecords();}if(rate&&performance.now()-lastWrite>1500){lastWrite=performance.now();persist();}}
+}
+$('#project').onchange=e=>chooseProject(e.target.value);document.querySelectorAll('[data-domain]').forEach(b=>b.onclick=()=>chooseProject(b.dataset.domain==='business'?'business':'construction-1'));
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{cancelPlot();rate=0;selected=null;interior=null;route=false;const next=b.dataset.mode;if(next==='scenario'&&!draft){draft=D.clone(root);draft.active='business';}mode=next;view=next==='operations'?'jobs':'buildings';group=next==='operations'?'work':'area';detailMode=next==='scenario'?'scenario':null;render();});
+$('#add-main').onclick=addMenu;$('#search').oninput=e=>{search=e.target.value.toLocaleLowerCase('tr-TR');renderRecords();};
+$('#summary-toggle').onclick=()=>{selected=null;detailMode=detailMode?'':mode==='scenario'?'scenario':'summary';renderDetail();};
+$('#calendar-toggle').onclick=()=>{selected=null;detailMode=detailMode==='calendar'?null:'calendar';renderDetail();};
+$('#close-detail').onclick=()=>{selected=null;detailMode=null;render();};$('#mobile-browser').onclick=()=>$('#browser').classList.toggle('open');$('#close-browser').onclick=()=>$('#browser').classList.remove('open');
+$('#new-land').onclick=()=>{const empty=root.projects.filter(p=>p.id==='construction-2'||p.id==='construction-3');modal('Boş araziden başla',sel('key','Çalışma alanı',empty.map(p=>[p.id,p.name+' · '+p.buildings.length+' yapı']))+'<p class="detail-copy">Seçtiğin alan 60 × 60 metredir. Kayıtlar silinmez; mevcut alanın açılır.</p>','',input=>chooseProject(input.key),'Alanı aç');};
+$('#overview').onclick=()=>{selected=null;detailMode=null;interior=null;route=false;render();scene?.overview();};$('#grid').onclick=()=>{if(scene)scene.grid.visible=!scene.grid.visible;};$('#undo').onclick=undo;$('#cancel-plot').onclick=cancelPlot;
+$('#zoom-in').onclick=()=>scene?.zoom(1.2);$('#zoom-out').onclick=()=>scene?.zoom(1/1.2);$('#rotate').onclick=()=>scene?.rotate();$('#camera-reset').onclick=()=>scene?.overview();$('#exit-interior').onclick=()=>{interior=null;render();scene?.overview();};
+$('#save').onclick=()=>{if(mode==='scenario')return toast('Senaryo ayrı kopyadır; Dosya menüsünden JSON olarak indirebilirsin.');if(persist())toast('Bu tarayıcıya kaydedildi. JSON indirerek bağımsız veri yedeği alabilirsin.');};
+$('#export').onclick=()=>{const blob=new Blob([JSON.stringify(world(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Project-World-'+(mode==='scenario'?'Senaryo-':'')+D.iso(Date.now())+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('#file-menu').open=false;};
+$('#import').onclick=()=>{$('#import-file').click();$('#file-menu').open=false;};$('#import-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>3e6)throw Error('JSON dosyası 3 MB sınırını aşıyor.');const next=D.validate(JSON.parse(await f.text()));confirmDialog('Dünya yedeğini aç','Mevcut dünya bu dosyayla değişecek. Önce JSON yedeği alabilirsin; değişimi Geri al ile geri çevirebilirsin.',()=>{history.push(D.clone(root));root=next;mode='edit';draft=null;selected=null;detailMode=null;rate=0;view='buildings';group='area';interior=null;persist();render();scene?.overview();return true;});}catch(err){toast('Dosya açılamadı: '+err.message);}e.target.value='';};
+$('#help').onclick=()=>{modal('Dünyan senin elinde.','<p class="detail-copy full">Proje menüsünden bir şantiye veya villa örneği seç. + Ekle tüm ekleme araçlarını açar. Yapı için arazide tıkla veya alan sürükle; sonra en, boy, kat ve tarih gir.<br><br>Çalışana tıklayarak adını ve yetkisini, araca tıklayarak plakayı ve sürücüyü gör. Formlarda ek atamalar Diğer bilgiler ve yerleşim bölümündedir.<br><br>Takvim ve hız planı ilerletir. İşletme sekmesinde Düzenle, İşlemler ve bağımsız Senaryo modlarını kullan. Depoyu seçerek içeri gir, raf ve palet ekle.<br><br>Kaydet yalnızca bu tarayıcıda veri tutar. Dosya > JSON yedeği indir saha kayıtlarını korur. Kaynak kodları GitHub deposundadır. Gerçek GPS ve Kapsio bağlantısı henüz yoktur.</p>','',()=>true,'Anladım');};
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.target.matches('input,textarea,select')){e.preventDefault();undo();}if(e.key==='Escape')cancelPlot();});
+document.addEventListener('click',e=>{if(!$('#file-menu').contains(e.target))$('#file-menu').open=false;});
+try{scene=new WorldScene($('#scene'),{select,plot:rect=>{cancelPlot();edit('buildings',null,rect);},status:toast});scene.onTick=tick;scene.overview();}catch(e){$('#render-error').hidden=false;console.error('WebGL başlatılamadı',e);let last=performance.now();const loop=now=>{tick(Math.min(.05,(now-last)/1000));last=now;requestAnimationFrame(loop);};requestAnimationFrame(loop);}
+render();if(loadIssue)toast(loadIssue);

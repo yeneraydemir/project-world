@@ -1,0 +1,5 @@
+node_modules/
+dist/vendor/
+.openai/local/
+*.log
+.DS_Store
