@@ -13,16 +13,19 @@
 - GitHub kaynak deposu ve kilitli bağımlılıktan tekrarlanabilir kurulum.
 
 ## Doğrulama
-- 18 veri ve davranış testi geçti.
+- 22 veri ve davranış testi: döndürme, sınırda geri alma, depo içi çakışma ve havuz aşamaları eklendi.
 - Sözdizimi kontrolü ve yerel Three.js varlık derlemesi geçti.
 - Canlı yayında Chrome ile gerçek WebGL sahnesi, şantiye/villa geçişi, çalışan/yetki kaydı, araç/sürücü ataması, geri alma, sevkiyat miktarı güncellemesi, 390 px mobil düzen ve takvim 2× ilerlemesi kontrol edildi. Konsolda uygulama hatası görülmedi.
 - Dahili önizleme adresi bulut tarayıcısında engellendi; görsel kontrol yayımlanan sürümde yapıldı.
 
 ## Önceki kapsamla farklar / sonraki işler
 - Eski dosyalar kurtarılamadığı için görseller ve veri şeması yeniden oluşturuldu. Eski v1 dünya dosyası içe aktarma şu an desteklenmez; v2 dosyaları kabul edilir.
-- 90° nesne döndürme kısayolu ve yön parametresi bu sürümde yoktur. Konum, en/boy ve kamera döndürme kullanılabilir.
-- Kat planı ve çok detaylı havuz kazı/tesisat modellemesi sadeleştirilmiştir.
-- Depo içi nesneler için raf/palet ile duvar sınırı kontrolü vardır; iki iç nesnenin birbirine çakışması henüz denetlenmez.
-- Binaların taşınması konum alanlarıyla yapılır; doğrudan nesne sürükleme sonraki aşamadır.
+- 90° döndürme ve R kısayolu geri getirildi; en/boy eksenleri yer değiştirir. Depo içi nesneler merkez etrafında birlikte döner. Sınır/çakışma halinde değişiklik geri alınır.
+- Havuz kazı → beton gövde → kaplama/tesisat → su dolumu → hazır aşamalarını izler. Çatı oluşumu kademelidir. Ağaç hareketleri ve açık dorsede yüklenen paletler eklendi.
+- Depo içinde duvar sınırı ve raf/palet çakışma kontrolü uygulanır.
+- Yapı, konteyner ve peyzaj kartındaki Taşı düğmesiyle arazide yeni merkez seçilir. Depo içeriği birlikte taşınır. Konum alanları da kullanılabilir.
 - İşletme işlemleri yerel kayıtlardır. Fiziksel stok rezervasyonu, muhasebe, gerçek GPS, Kapsio API, oturumlu bulut kaydı veya çok kullanıcı yoktur.
 - GitHub Actions kontrol dosyası hazırlanmıştır; etkin çalıştığı ayrıca doğrulanmalıdır.
+
+## Birebirlik sınırı
+Eski kaynaklar ve eski ekran görüntüleri bulunmadığından eski sürümün piksel/geometri düzeyinde aynılığı doğrulanamaz. Bu güncelleme konuşmada kaydı bulunan özellik farklarını kapatır; kayıp kodun aynen kurtarıldığı anlamına gelmez.
