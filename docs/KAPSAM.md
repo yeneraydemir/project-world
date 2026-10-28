@@ -52,3 +52,14 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 - Her tamamlanan değişiklikten sonra uzak commit ve dosya listesi doğrulanır.
 - Site yayını GitHub kaydından sonra yapılır.
 - GitHub'daki koddan bağımlılıkları sabit sürümle kurup uygulama yeniden üretilebilmelidir.
+
+## 29 Ekim: Proje / şirket, konum ve yapı hiyerarşisi
+- İnşaat ve işletme alanları ayrı proje/şirket portföyleri içerir.
+- Bir proje/şirket birden fazla şehir ve adreste konum/yerleşke barındırır.
+- Her konumda fiziksel yapılar; her yapıda bağımsız ofis, daire, dükkân ve diğer birimler bulunabilir.
+- Yerleşke tipi ile yapı tipi ayrıdır: villa sitesi bir yerleşke, villa bir yapı, plaza içindeki ofis bir birimdir.
+- Hazır konum şablonları: boş arazi, tek bina, apartman/rezidans/villa/müstakil yerleşkesi, karma, kampüs, sanayi, tek ofis, müstakil dükkân ve mağaza yerleşkesi.
+- Yeni şirket/proje sihirbazında birden fazla şehir virgülle girilir; her şehirde bağımsız bir konum oluşturulur. Her konuma başka yapılar ve birimler eklenebilir.
+- Üst toplamlar tüm portföyü, sahne sayaçları yalnızca açık konumu temsil eder. Şehir ve yapı/birim türü filtreleri vardır.
+- Eski v2 kayıtları kimlikleri, atamaları ve örnekleri korunarak hiyerarşiye tamamlanır. Depo kaydı kaynak kodundan ayrıdır.
+- Sınırlar: 50 proje/şirket; 100 konum; her konumda 12 yapı ve 300 bağımsız birim. Her konum ayrı 60×60 m temsili sahnedir. Şehir etiketleri gerçek harita veya GPS değildir.

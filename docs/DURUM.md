@@ -29,3 +29,13 @@
 
 ## Birebirlik sınırı
 Eski kaynaklar ve eski ekran görüntüleri bulunmadığından eski sürümün piksel/geometri düzeyinde aynılığı doğrulanamaz. Bu güncelleme konuşmada kaydı bulunan özellik farklarını kapatır; kayıp kodun aynen kurtarıldığı anlamına gelmez.
+
+## 29 Ekim: Kategorizasyon güncellemesi
+- Proje/şirket → şehir/konum → yapı → bağımsız birim hiyerarşisi eklendi.
+- 24 yapı tipi, 12 yerleşke şablonu ve 7 bağımsız birim tipi eklendi.
+- Aynı şirketin farklı şehirlerdeki konumlarını, ortak sayaçlar ve aramayla yönetme akışı eklendi.
+- Tek ofis şablonu ortak binada bir birim; müstakil dükkân şablonu kendi fiziksel yapısı olarak oluşturulur.
+- Birimlerde bina bağlantısı, kat/seviye, kapı no, alan, kapasite, departman ve kullanım durumu tutulur; kat alanı/kat sayısı/tekrarlı kapı kontrolleri uygulanır.
+- Mevcut v2 dosyaları ve tarayıcı kayıtları otomatik tamamlanır; ayrı anahtara taşınmaz veya silinmez.
+- 31 test geçti. Şehirler arası örnek: 5 şehir, 3 yapı, 2 ofis toplamı test edildi.
+- Ticari ve endüstriyel yapılara vitrin/saçak, endüstriyel çatı ekipmanı gibi model ayrımları eklendi. Birim işaretleri kat/façade üzerinde gösterilir; mimari kat planı değildir.

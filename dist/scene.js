@@ -1,3 +1,4 @@
+import {CATALOG} from './catalog.js';
 import * as T from 'three';
 import {OrbitControls} from './vendor/OrbitControls.js';
 import {phase,DAY,poolPhase} from './data.js';
@@ -50,19 +51,20 @@ export class WorldScene{
   this.root.traverse(o=>{if(o.geometry)o.geometry.dispose();});this.scene.remove(this.root);this.root=group(this.scene);
   const record=(g,col,r)=>{g.userData.record={col,id:r.id};if(selected?.id===r.id)this.highlightTarget=g;};
   const label=(name,g,y=2)=>{const el=document.createElement('button');el.className='world-label';el.textContent=name;el.tabIndex=-1;el.onclick=()=>this.select(g.userData.record);this.labelRoot.append(el);this.labels.push({el,g,y});};
-  for(const b of p.buildings){const g=group(this.root,b.x,.4,b.z);record(g,'buildings',b);
+  for(const b of p.buildings){const model=CATALOG[b.kind].model;const g=group(this.root,b.x,.4,b.z);record(g,'buildings',b);
    box(g,b.w+.8,.3,b.d+.8,0,.05,0,'#9b927b');const floors=[];
    for(let i=0;i<b.floors;i++){const f=group(g,0,i*3.1,0);box(f,b.w,.27,b.d,0,.35,0,'#d1c8b6');for(const x of [-b.w/2+.35,b.w/2-.35])for(const z of [-b.d/2+.35,b.d/2-.35])box(f,.42,3.1,.42,x,1.7,z,'#c4bca8');
     const wall=group(f);box(wall,b.w,2.8,.17,0,1.85,-b.d/2+.2,b.color);box(wall,.17,2.8,b.d,-b.w/2+.2,1.85,0,b.color);
     for(let x=-b.w/2+1.2;x<b.w/2-.5;x+=2.3){box(wall,1.55,1.65,.12,x,1.9,b.d/2-.07,'#6d9393');box(wall,1.72,.12,.2,x,1.02,b.d/2,'#a69578');}
     for(let z=-b.d/2+1.2;z<b.d/2-.5;z+=2.3)box(wall,.12,1.65,1.55,b.w/2-.07,1.9,z,'#5e8488');
-    if(b.kind==='villa'){box(wall,b.w*.38,.14,1.3,b.w*.2,.6,b.d/2+.45,'#bc9c72');box(wall,b.w*.38,.7,.07,b.w*.2,1.03,b.d/2+1.05,'#a6c4bd');}
+    if(model==='villa'){box(wall,b.w*.38,.14,1.3,b.w*.2,.6,b.d/2+.45,'#bc9c72');box(wall,b.w*.38,.7,.07,b.w*.2,1.03,b.d/2+1.05,'#a6c4bd');}
     floors.push({f,wall});
    }
-   const top=group(g,0,b.floors*3.1+.5,0);roof(top,b,0);if(b.kind==='warehouse'){box(g,b.w*.42,3.1,.15,b.w*.18,1.75,b.d/2+.05,'#86978b');for(let i=0;i<3;i++)box(g,b.w*.42,.06,.2,b.w*.18,1+i*.7,b.d/2+.15,'#66786d');}
-   this.buildings.push({b,g,floors,top});label(b.name,g,b.floors*3.1+2);
-   if(b.kind==='building')this.cranes.push(crane(this.root,b.x-b.w/2-2.5,b.z-b.d/2+1,b.floors*3.1+6));
+   const top=group(g,0,b.floors*3.1+.5,0);roof(top,b,0);if(model==='warehouse'){box(g,b.w*.42,3.1,.15,b.w*.18,1.75,b.d/2+.05,'#86978b');for(let i=0;i<3;i++)box(g,b.w*.42,.06,.2,b.w*.18,1+i*.7,b.d/2+.15,'#66786d');}
+   if(model==='shop'||model==='mixed'){box(g,b.w*.82,2.25,.14,0,1.6,b.d/2+.1,'#729d9d');box(g,b.w+.3,.22,1.7,0,2.85,b.d/2+.65,'#b49761');box(g,b.w*.65,.4,.12,0,3.23,b.d/2+.2,'#5b7765');for(let x=-b.w/2+.7;x<b.w/2;x+=1.7)box(g,.09,2.4,.2,x,1.6,b.d/2+.23,'#b7b7a0');}if(model==='factory'){for(const x of [-b.w*.25,b.w*.25]){cyl(top,.45,.6,3,x,1.7,-b.d*.25,'#8b9a91');box(top,2,.6,2,x,.5,0,'#9ca999');}}if(model==='office'){for(const floor of floors)box(floor.wall,b.w*.88,1.55,.09,0,1.9,b.d/2+.05,'#628b96');}this.buildings.push({b,g,floors,top});label(b.name,g,b.floors*3.1+2);
+   if(['building','office','mixed'].includes(model)&&b.floors>4)this.cranes.push(crane(this.root,b.x-b.w/2-2.5,b.z-b.d/2+1,b.floors*3.1+6));
   }
+  for(const u of p.spaces||[]){const b=p.buildings.find(b=>b.id===u.buildingId);if(!b)continue;const same=p.spaces.filter(x=>x.buildingId===b.id&&x.floor===u.floor),i=same.indexOf(u),step=Math.min(2,b.w/(same.length+1));const g=group(this.root,b.x-b.w/2+(i+1)*step,.4+(u.floor-1)*3.1+1.65,b.z+b.d/2+.26);box(g,Math.min(1.2,step*.75),.7,.16,0,0,0,selected?.id===u.id?'#e4c778':'#9cbfba');g.visible=p.domain==='business'||phase(b,Date.parse(p.cursor+'T00:00:00Z')).floors>=u.floor;record(g,'spaces',u);if(selected?.id===u.id)label(u.name+' · Kat '+u.floor,g,1);}
   for(const c of p.containers){const g=group(this.root,c.x,.4,c.z);box(g,c.w,2.8,c.d,0,1.4,0,'#d2d5c3');box(g,c.w+.3,.15,c.d+.3,0,2.85,0,'#70887c');box(g,.85,2.1,.05,-c.w*.25,1.15,c.d/2+.02,'#76959a');for(const x of [0,c.w*.3])box(g,.95,.85,.05,x,1.65,c.d/2+.04,'#618b92');record(g,'containers',c);label(c.name,g,3.8);}
   for(const o of p.landscape){if(interior&&o.parentId!==interior)continue;if(o.parentId&&o.parentId!==interior)continue;let g=group(this.root,o.x,.42,o.z),phaseInfo=null;
    if(o.type==='tree'){this.foliage.push(tree(g,0,0,o.h));}
