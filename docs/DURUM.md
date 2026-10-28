@@ -37,5 +37,9 @@ Eski kaynaklar ve eski ekran görüntüleri bulunmadığından eski sürümün p
 - Tek ofis şablonu ortak binada bir birim; müstakil dükkân şablonu kendi fiziksel yapısı olarak oluşturulur.
 - Birimlerde bina bağlantısı, kat/seviye, kapı no, alan, kapasite, departman ve kullanım durumu tutulur; kat alanı/kat sayısı/tekrarlı kapı kontrolleri uygulanır.
 - Mevcut v2 dosyaları ve tarayıcı kayıtları otomatik tamamlanır; ayrı anahtara taşınmaz veya silinmez.
-- 31 test geçti. Şehirler arası örnek: 5 şehir, 3 yapı, 2 ofis toplamı test edildi.
+- 33 test geçti. Şehirler arası örnek: 5 şehir, 3 yapı, 2 ofis toplamı test edildi.
 - Ticari ve endüstriyel yapılara vitrin/saçak, endüstriyel çatı ekipmanı gibi model ayrımları eklendi. Birim işaretleri kat/façade üzerinde gösterilir; mimari kat planı değildir.
+
+- Tam kullanılan bina sayısı ile paylaşılan binalardaki bağımsız birimler ayrı toplanır: 5 şehirde 3 tam bina + 2 ofis modeli test edildi.
+
+- Canlı Chrome kontrolünde 5 şehirli şirket oluşturma, İstanbul filtresi, ortak plaza içinde ek ofis ve toplamların güncellenmesi doğrulandı. Test kayıtları geri alınır. İşletme çalışan formunda ofis/şube görevleri, sahnede uygun ofis profilleri vardır.
