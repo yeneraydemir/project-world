@@ -75,3 +75,7 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 - Lacivert üst şerit, açık paneller ve mavi ana aksiyonlar. Bugün ve Ekle 3D sahne araç çubuğunda; proje özeti, animasyon takvimi ve alanı sıfırlama Görünüm altında.
 - Konum ve kayıtlar Alan, Ekip ve İşler başlıklarında. Yedek, kaydetme ve rehber Araçlar menüsünde. Dar ekranlarda kayıtlar ayrı açılır, detay paneli sahnenin altına yerleşir.
 - Veri şeması, tarayıcı kayıt anahtarı ve operasyon akışları aynı.
+
+### Cam yüzeyli çalışma alanı
+- Kayıt paneli masaüstünde ve mobilde sahne üzerinden açılıp kapanır. Açık kategorideki yeni kayıt yan panelden tek tıkla başlatılır; genel ekleme menüsü Alan, Ekip ve İşler olarak gruplanır.
+- Açık renk cam yüzeyler, okunaklı metin ve saydamlığı azaltan sistem tercihleri için opak görünüm. Saha verileri ve kayıt biçimi değişmedi.
