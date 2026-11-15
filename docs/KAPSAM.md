@@ -63,3 +63,10 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 - Üst toplamlar tüm portföyü, sahne sayaçları yalnızca açık konumu temsil eder. Şehir ve yapı/birim türü filtreleri vardır.
 - Eski v2 kayıtları kimlikleri, atamaları ve örnekleri korunarak hiyerarşiye tamamlanır. Depo kaydı kaynak kodundan ayrıdır.
 - Sınırlar: 50 proje/şirket; 100 konum; her konumda 12 yapı ve 300 bağımsız birim. Her konum ayrı 60×60 m temsili sahnedir. Şehir etiketleri gerçek harita veya GPS değildir.
+
+### Günlük saha operasyonları (veri şeması v3)
+- Bugün ekranı aynı proje/şirketin konumlarındaki gecikmeleri, açık görevleri ve beklenen teslimatları Türkiye takvimine göre sıralar. Kayıttan doğru sahne ve yapıya geçilir.
+- Yapım aşaması: plan başlangıcı/hedef bitiş, gerçekleşen yüzde, üç fotoğraf, sorumlu ve saha notu. Plan animasyonu saha ilerlemesinden ayrı kalır.
+- Bakım/arıza yapı, bağımsız bölüm ve ekipman adıyla izlenir. Malzeme teslimatında araç, sürücü, son bildirilen yol, hedef ve beklenen tarih görülür. Teslim alma kaydı stoğa bir kez işler.
+- Mevcut v2 kayıtları otomatik taşınır. Kayıtlar ve küçük fotoğraflar tarayıcıya ve JSON yedeğine yazılır.
+- Kapsio dosya köprüsü: Personel (İK), araç/sürücü (Filo) ve stok/malzeme (Stok/Depo) hazırlanmış JSON ile konum bazında alınır. Saha kayıtları İnşaat modülü için ayrı JSON'a çıkar; fotoğraflar normal dünya yedeğinde kalır. Şablon ve eşleştirme Project World sözleşmesidir, doğrudan yerel Kapsio dışa aktarım biçimi değildir. Canlı API senkronizasyonu ve GPS bağlı değildir.
