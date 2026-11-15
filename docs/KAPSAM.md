@@ -70,3 +70,8 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 - Bakım/arıza yapı, bağımsız bölüm ve ekipman adıyla izlenir. Malzeme teslimatında araç, sürücü, son bildirilen yol, hedef ve beklenen tarih görülür. Teslim alma kaydı stoğa bir kez işler.
 - Mevcut v2 kayıtları otomatik taşınır. Kayıtlar ve küçük fotoğraflar tarayıcıya ve JSON yedeğine yazılır.
 - Kapsio dosya köprüsü: Personel (İK), araç/sürücü (Filo) ve stok/malzeme (Stok/Depo) hazırlanmış JSON ile konum bazında alınır. Saha kayıtları İnşaat modülü için ayrı JSON'a çıkar; fotoğraflar normal dünya yedeğinde kalır. Şablon ve eşleştirme Project World sözleşmesidir, doğrudan yerel Kapsio dışa aktarım biçimi değildir. Canlı API senkronizasyonu ve GPS bağlı değildir.
+
+### Sade çalışma alanı
+- Lacivert üst şerit, açık paneller ve mavi ana aksiyonlar. Bugün ve Ekle 3D sahne araç çubuğunda; proje özeti, animasyon takvimi ve alanı sıfırlama Görünüm altında.
+- Konum ve kayıtlar Alan, Ekip ve İşler başlıklarında. Yedek, kaydetme ve rehber Araçlar menüsünde. Dar ekranlarda kayıtlar ayrı açılır, detay paneli sahnenin altına yerleşir.
+- Veri şeması, tarayıcı kayıt anahtarı ve operasyon akışları aynı.
