@@ -1,6 +1,7 @@
+import {TYPES,STAGES,STATES,PRIORITIES,today} from './operations.js';
 import {CATALOG,LAYOUTS,UNITS} from './catalog.js';
-export const VERSION=2, DAY=86400000;
-export const LABELS={buildings:'Yapılar',landscape:'Peyzaj',containers:'Konteynerler',workers:'Çalışanlar',vehicles:'Araçlar',tasks:'Görevler',materials:'Malzeme',jobs:'İşlemler',spaces:'Bağımsız birimler'};
+export const VERSION=3, DAY=86400000;
+export const LABELS={buildings:'Yapılar',landscape:'Peyzaj',containers:'Konteynerler',workers:'Çalışanlar',vehicles:'Araçlar',tasks:'Görevler',materials:'Malzeme',jobs:'İşlemler',spaces:'Bağımsız birimler',operations:'Saha kayıtları'};
 export const KINDS=Object.fromEntries(Object.entries(CATALOG).map(([key,value])=>[key,value.label]));
 export const LAND={pool:'Havuz',lawn:'Çim alan',path:'Yürüyüş yolu',terrace:'Teras',tree:'Ağaç',hedge:'Bitki çiti',fence:'Bahçe çiti',pergola:'Pergola',light:'Aydınlatma',road:'Araç yolu',rack:'Depo rafı',pallet:'Palet'};
 export const AUTH={worker:'Çalışan',leader:'Ekip lideri',chief:'Yetkili / şef'};
@@ -44,31 +45,67 @@ export function normalize(p,col,input,previous=null){
   named(r);r.type=one(r.type,LAND,'Nesne türü');r.w=num(r.w,r.type==='pool'?3:.2,60,'En');r.d=num(r.d,r.type==='pool'?2:.2,60,'Boy');r.h=num(r.h,r.type==='pool'?.5:.05,r.type==='pool'?3:10,'Yükseklik');r.x=num(r.x,-30,30,'Konum X');r.z=num(r.z,-30,30,'Konum Z');r.buildingId=ref(p,'buildings',r.buildingId,'Yapı');r.parentId=ref(p,'buildings',r.parentId,'Depo');if(r.parentId){const b=p.buildings.find(b=>b.id===r.parentId);if(CATALOG[b.kind].model!=='warehouse'||!['rack','pallet'].includes(r.type))throw Error('Depo içine raf ve palet eklenebilir.');if(Math.abs(r.x-b.x)+r.w/2>b.w/2-.5||Math.abs(r.z-b.z)+r.d/2>b.d/2-.5)throw Error('Nesne depo duvarları içinde kalmalı.');for(const other of p.landscape.filter(o=>o.parentId===r.parentId&&o.id!==r.id))if(collision(other,r,0))throw Error('Depo içinde raf veya palet çakışıyor.');}else validFootprint(p,r,r.id);
  } else if(col==='tasks'){
   named(r);r.buildingId=ref(p,'buildings',r.buildingId,'Yapı');r.workerId=ref(p,'workers',r.workerId,'Sorumlu');assignSpace(p,r);date(r.due);r.status=one(r.status||'todo',{todo:1,doing:1,done:1},'Durum');
+ } else if(col==='operations'){
+  named(r);r.type=one(r.type,TYPES,'Kayıt türü');r.due=r.due||today();date(r.due);
+  r.buildingId=ref(p,'buildings',r.buildingId,'Yapı');r.spaceId=r.type==='maintenance'?r.spaceId:null;assignSpace(p,r);
+  if(!r.buildingId)throw Error('Bir yapı veya bağımsız bölüm seç.');
+  r.workerId=ref(p,'workers',r.workerId,'Sorumlu');r.priority=one(r.priority||'normal',PRIORITIES,'Öncelik');r.notes=txt(r.notes,1000);
+  r.status=one(r.status||'todo',STATES,'Durum');r.completed=r.status==='done'?(r.completed||today()):null;if(r.completed)date(r.completed);
+  if(r.type==='stage'){
+   r.stage=one(r.stage,STAGES,'Aşama');date(r.start);if(r.start>r.due)throw Error('Hedef bitiş, başlangıçtan önce olamaz.');
+   r.actual=num(r.actual||0,0,100,'Gerçekleşen ilerleme');r.status=r.actual===100?'done':r.actual>0?'doing':'todo';r.completed=r.status==='done'?(r.completed||today()):null;
+   r.photos=r.photos??[];if(!Array.isArray(r.photos)||r.photos.length>3||r.photos.some(photo=>typeof photo!=='string'||photo.length>115000||!/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(photo)))throw Error('En fazla üç küçük JPEG fotoğraf eklenebilir.');
+  }else{r.photos=[];r.actual=null;r.stage=null;r.start=null;}
+  r.asset=r.type==='maintenance'?txt(r.asset,100):'';
+  if(r.type==='delivery'){
+   r.materialId=ref(p,'materials',r.materialId,'Malzeme');if(!r.materialId)throw Error('Teslimat malzemesini seç.');
+   r.vehicleId=ref(p,'vehicles',r.vehicleId,'Araç');r.quantity=num(r.quantity,.01,1e8,'Teslimat miktarı');
+   const v=p.vehicles.find(v=>v.id===r.vehicleId);
+   if(v?.status==='maintenance'&&r.status==='doing')throw Error('Bakımda olan araç yola çıkarılamaz.');
+   r.origin=txt(r.origin,100);r.road=txt(r.road,120);
+   r.received=r.received===true;if(r.received!==(r.status==='done'))throw Error('Teslimatı stok girişiyle birlikte tamamla.');
+  }else{r.materialId=null;r.vehicleId=null;r.quantity=null;r.origin='';r.road='';r.received=false;}
  } else if(col==='materials'){
   named(r);r.unit=txt(r.unit,20)||'adet';r.stock=num(r.stock,0,1e9,'Stok');r.minimum=num(r.minimum,0,1e9,'Minimum stok');
  } else if(col==='jobs'){
-  named(r);r.type=one(r.type,JOBS,'İşlem türü');r.buildingId=ref(p,'buildings',r.buildingId,'Tesis');if(!r.buildingId)throw Error('Kaynak tesis seç.');r.targetId=ref(p,'buildings',r.targetId,'Hedef');if(r.type==='transfer'&&(!r.targetId||r.targetId===r.buildingId))throw Error('Transfer için farklı bir hedef seç.');r.vehicleId=ref(p,'vehicles',r.vehicleId,'Araç');r.quantity=num(r.quantity,1,500,'Miktar');if(!Number.isInteger(r.quantity))throw Error('Miktar tam sayı olmalı.');r.loaded=num(r.loaded||0,0,r.quantity,'Yüklenen / işlenen miktar');r.route=one(r.route||'istanbul',{istanbul:1,eskisehir:1,konya:1},'Rota');r.progress=num(r.progress||0,0,1,'Rota ilerlemesi');r.status=one(r.status||'planned',{planned:1,loading:1,ready:1,transit:1,delivered:1},'İşlem durumu');
+  if(r.due)date(r.due);else r.due=null;named(r);r.type=one(r.type,JOBS,'İşlem türü');r.buildingId=ref(p,'buildings',r.buildingId,'Tesis');if(!r.buildingId)throw Error('Kaynak tesis seç.');r.targetId=ref(p,'buildings',r.targetId,'Hedef');if(r.type==='transfer'&&(!r.targetId||r.targetId===r.buildingId))throw Error('Transfer için farklı bir hedef seç.');r.vehicleId=ref(p,'vehicles',r.vehicleId,'Araç');r.quantity=num(r.quantity,1,500,'Miktar');if(!Number.isInteger(r.quantity))throw Error('Miktar tam sayı olmalı.');r.loaded=num(r.loaded||0,0,r.quantity,'Yüklenen / işlenen miktar');r.route=one(r.route||'istanbul',{istanbul:1,eskisehir:1,konya:1},'Rota');r.progress=num(r.progress||0,0,1,'Rota ilerlemesi');r.status=one(r.status||'planned',{planned:1,loading:1,ready:1,transit:1,delivered:1},'İşlem durumu');
   if(r.vehicleId){const v=p.vehicles.find(v=>v.id===r.vehicleId);if(v.status==='maintenance'&&r.status!=='delivered')throw Error('Araç bakımda.');if(r.quantity>v.capacity)throw Error('Yük araç kapasitesini aşıyor.');if(r.status!=='delivered'&&p.jobs.some(j=>j.id!==r.id&&j.vehicleId===v.id&&j.status!=='delivered'))throw Error('Araçta başka bir açık görev var.');}
   if(['ready','transit','delivered'].includes(r.status)&&r.loaded<r.quantity)throw Error('Yük / işlem tamamlanmadan bu aşamaya geçilemez.');
  }
  return r;
 }
 export function put(p,col,input){
- if(!Object.hasOwn(LABELS,col))throw Error('Kayıt türü geçersiz.');const previous=p[col].find(r=>r.id===input.id);if(!previous&&p[col].length>=({buildings:12,workers:200,vehicles:30,tasks:300,containers:30,landscape:300,materials:100,jobs:100,spaces:300}[col]))throw Error('Bu kayıt türünün sınırına ulaşıldı.');
- const r=normalize(p,col,input,previous);if(col==='buildings'){const units=p.spaces||[];if(units.some(u=>u.buildingId===r.id&&(u.floor>r.floors||u.area>r.w*r.d)))throw Error('Bağlı birimler yeni bina ölçülerine / katlarına sığmıyor.');for(let floor=1;floor<=r.floors;floor++)if(units.filter(u=>u.buildingId===r.id&&u.floor===floor).reduce((n,u)=>n+u.area,0)>r.w*r.d)throw Error('Bağlı birimlerin toplam alanı kat alanını aşıyor.');}
+ if(!Object.hasOwn(LABELS,col))throw Error('Kayıt türü geçersiz.');const previous=p[col].find(r=>r.id===input.id);if(!previous&&p[col].length>=({buildings:12,workers:200,vehicles:30,tasks:300,containers:30,landscape:300,materials:100,jobs:100,spaces:300,operations:300}[col]))throw Error('Bu kayıt türünün sınırına ulaşıldı.');
+ if(col==='operations'&&((previous?.received&&!input.received)||(input.received&&!previous?.received)))throw Error('Teslim al işlemini kullan.');
+ const r=normalize(p,col,input,previous);
+ if(previous?.received&&['type','materialId','quantity','buildingId','status','completed'].some(k=>r[k]!==previous[k]))throw Error('Teslim alınmış kaydın stok ve hedef bilgileri değiştirilemez.');
+ if(col==='buildings'){const units=p.spaces||[];if(units.some(u=>u.buildingId===r.id&&(u.floor>r.floors||u.area>r.w*r.d)))throw Error('Bağlı birimler yeni bina ölçülerine / katlarına sığmıyor.');for(let floor=1;floor<=r.floors;floor++)if(units.filter(u=>u.buildingId===r.id&&u.floor===floor).reduce((n,u)=>n+u.area,0)>r.w*r.d)throw Error('Bağlı birimlerin toplam alanı kat alanını aşıyor.');}
  if(col==='buildings')for(const child of p.landscape.filter(o=>o.parentId===r.id)){if(Math.abs(child.x-r.x)+child.w/2>r.w/2-.5||Math.abs(child.z-r.z)+child.d/2>r.d/2-.5)throw Error('Depo içindeki raf / palet yeni ölçülerde dışarıda kalıyor.');}
- if(col==='spaces'&&previous&&previous.buildingId!==r.buildingId)for(const linked of [...p.workers,...p.tasks].filter(o=>o.spaceId===r.id))linked.buildingId=r.buildingId;
+ if(col==='spaces'&&previous&&previous.buildingId!==r.buildingId)for(const linked of [...p.workers,...p.tasks,...p.operations].filter(o=>o.spaceId===r.id))linked.buildingId=r.buildingId;
  if(previous)p[col][p[col].indexOf(previous)]=r;else p[col].push(r);log(p,r.name+(previous?' güncellendi.':' eklendi.'));return r;
 }
 export function remove(p,col,key){const r=p[col].find(r=>r.id===key);if(!r)return;
- if(col==='buildings'&&[...(p.spaces||[]),...p.workers,...p.vehicles,...p.landscape,...p.tasks,...p.jobs].some(o=>o.buildingId===key||o.parentId===key||o.targetId===key))throw Error('Bağlı kayıtları önce başka bir yapıya taşı.');
- if(col==='spaces'&&[...p.workers,...p.tasks].some(o=>o.spaceId===key))throw Error('Önce birime bağlı çalışan / görev atamalarını kaldır.');
- if(col==='workers'&&[...p.vehicles,...p.tasks].some(o=>o.driverId===key||o.workerId===key))throw Error('Önce araç ve görev atamalarını kaldır.');
+ if(col==='buildings'&&[...(p.spaces||[]),...p.workers,...p.vehicles,...p.landscape,...p.tasks,...p.jobs,...p.operations].some(o=>o.buildingId===key||o.parentId===key||o.targetId===key))throw Error('Bağlı kayıtları önce başka bir yapıya taşı.');
+ if(col==='spaces'&&[...p.workers,...p.tasks,...p.operations].some(o=>o.spaceId===key))throw Error('Önce birime bağlı çalışan / görev atamalarını kaldır.');
+ if(col==='workers'&&[...p.vehicles,...p.tasks,...p.operations].some(o=>o.driverId===key||o.workerId===key))throw Error('Önce araç ve görev atamalarını kaldır.');
  if(col==='containers'&&p.workers.some(o=>o.containerId===key))throw Error('Önce konaklama atamalarını kaldır.');
- if(col==='vehicles'&&p.jobs.some(o=>o.vehicleId===key))throw Error('Araca bağlı işlem kayıtları var.');
+ if(col==='operations'&&r.received)throw Error('Teslim alınmış kayıt stok geçmişi için saklanır.');
+ if(col==='materials'&&p.operations.some(o=>o.materialId===key))throw Error('Malzemeye bağlı teslimat kayıtları var.');
+ if(col==='vehicles'&&[...p.jobs,...p.operations].some(o=>o.vehicleId===key))throw Error('Araca bağlı işlem kayıtları var.');
  p[col]=p[col].filter(o=>o.id!==key);log(p,r.name+' kaldırıldı.');
 }
 export function receive(p,key,quantity){const m=p.materials.find(m=>m.id===key);if(!m)throw Error('Malzeme bulunamadı.');m.stock+=num(quantity,.01,1e8,'Giriş miktarı');log(p,m.name+' stoku güncellendi.');}
+export function acceptDelivery(p,key,day=today()){
+ const r=p.operations.find(r=>r.id===key);
+ if(!r||r.type!=='delivery'||r.received)throw Error('Bu teslimat stok girişine uygun değil.');
+ const next=normalize(p,'operations',{...r,received:true,status:'done',completed:day},r);
+ const m=p.materials.find(m=>m.id===r.materialId);
+ if(m.stock+r.quantity>1e9)throw Error('Stok sınırı aşılıyor.');
+ receive(p,r.materialId,r.quantity);
+ p.operations[p.operations.indexOf(r)]=next;
+ log(p,r.name+' teslim alındı.');
+ return next;
+}
 export function stepJob(p,key,action){
  const j=p.jobs.find(j=>j.id===key);if(!j)throw Error('İşlem bulunamadı.');const next=clone(j);
  if(action==='load'){if(!['planned','loading'].includes(j.status))throw Error('Bu aşamada yük eklenemez.');next.loaded=Math.min(j.quantity,j.loaded+Math.max(1,Math.ceil(j.quantity/3)));next.status=next.loaded===next.quantity?'ready':'loading';}
@@ -80,7 +117,7 @@ export function alerts(p,at){return [...p.materials.filter(m=>m.stock<m.minimum)
 export function estimate(b){const area=b.w*b.d*b.floors;return {area,concrete:Math.round(area*.35),steel:Math.round(area*.04*100)/100,brick:Math.round(area*28)};}
 export function metrics(p){return {area:p.buildings.reduce((n,b)=>n+b.w*b.d*b.floors,0),capacity:p.buildings.filter(b=>CATALOG[b.kind].model==='warehouse').reduce((n,b)=>n+Math.floor(b.w*b.d*1.2),0),production:p.buildings.filter(b=>CATALOG[b.kind].model==='factory').reduce((n,b)=>n+Math.floor(b.w*b.d*.8),0)};}
 export function log(p,message){p.log.unshift({at:new Date().toISOString(),message});p.log=p.log.slice(0,30);}
-export function blank(key,name,domain='construction'){return {id:key,name,domain,cursor:'2026-10-26',boundary:{style:'fence',height:1.5,gate:6},buildings:[],workers:[],vehicles:[],containers:[],landscape:[],tasks:[],materials:[{id:'concrete-'+key,name:'Hazır beton',stock:180,minimum:50,unit:'m³'},{id:'steel-'+key,name:'Donatı çeliği',stock:12,minimum:20,unit:'ton'},{id:'brick-'+key,name:'Tuğla',stock:4200,minimum:1000,unit:'adet'}],jobs:[],spaces:[],log:[]};}
+export function blank(key,name,domain='construction'){return {id:key,name,domain,cursor:'2026-10-26',boundary:{style:'fence',height:1.5,gate:6},buildings:[],workers:[],vehicles:[],containers:[],landscape:[],tasks:[],materials:[{id:'concrete-'+key,name:'Hazır beton',stock:180,minimum:50,unit:'m³'},{id:'steel-'+key,name:'Donatı çeliği',stock:12,minimum:20,unit:'ton'},{id:'brick-'+key,name:'Tuğla',stock:4200,minimum:1000,unit:'adet'}],jobs:[],spaces:[],operations:[],log:[]};}
 const building=(p,name,x,z,w,d,floors,kind='building')=>put(p,'buildings',{name,x,z,w,d,floors,kind,start:'2026-01-01',end:kind==='villa'?'2027-05-01':'2028-12-31',budget:kind==='villa'?9500000:45000000,roof:kind==='villa'?'pitched':'flat',color:'#d2c4ac'});
 function team(p){const names=[['Elif','Aydın'],['Murat','Kaya'],['Can','Demir'],['Derya','Çelik'],['Ali','Şahin'],['Ece','Koç'],['Emre','Yıldız'],['Deniz','Aksoy']];
  for(let i=0;i<names.length;i++)put(p,'workers',{firstName:names[i][0],lastName:names[i][1],role:ROLES[i],authority:i===0?'chief':i===1?'leader':'worker',buildingId:p.buildings[i%p.buildings.length]?.id,containerId:p.containers[0]?.id,status:'active',shift:'08:00–17:00'});
@@ -106,12 +143,12 @@ export function initial(){
  const root={version:VERSION,projects:[a,b,c,v,vill,biz],active:'construction-1'};ensureHierarchy(root);return root;
 }
 export function validate(input){
- if(!input||input.version!==VERSION||!Array.isArray(input.projects)||input.projects.length<1||input.projects.length>100)throw Error('Project World v2 dünya JSON dosyası gerekli. Eski v1 dosyaları bu sürüme doğrudan aktarılamaz.');
- const root=clone(input),ids=new Set();ensureHierarchy(root);
+ if(!input||![2,VERSION].includes(input.version)||!Array.isArray(input.projects)||input.projects.length<1||input.projects.length>100)throw Error('Project World v2 veya v3 dünya JSON dosyası gerekli. Eski v1 dosyaları bu sürüme doğrudan aktarılamaz.');
+ const root=clone(input),ids=new Set();root.version=VERSION;ensureHierarchy(root);
  for(const p of root.projects){
-  if(typeof p.id!=='string'||!p.id||ids.has(p.id))throw Error('Proje kimliği geçersiz.');ids.add(p.id);p.name=txt(p.name);if(!p.name)throw Error('Proje adı gerekli.');p.domain=one(p.domain|| (p.id==='business'?'business':'construction'),{business:1,construction:1},'Alan');p.portfolioId=txt(p.portfolioId);if(!root.portfolios.some(f=>f.id===p.portfolioId&&f.domain===p.domain))throw Error('Proje / şirket eşleşmesi geçersiz.');p.city=txt(p.city||'Belirtilmedi',60);p.district=txt(p.district,60);p.address=txt(p.address,240);p.layoutType=one(p.layoutType||'empty',LAYOUTS,'Yerleşke türü');p.spaces??=[];date(p.cursor);p.boundary={style:one(p.boundary?.style||'fence',{fence:1,wall:1,hedge:1,line:1},'Sınır'),height:num(p.boundary?.height??1.5,.5,3,'Sınır yüksekliği'),gate:num(p.boundary?.gate??6,2,10,'Kapı genişliği')};p.log=Array.isArray(p.log)?p.log.slice(0,30).map(l=>({at:txt(l.at),message:txt(l.message,180)})):[];
-  const used=new Set();for(const col of Object.keys(LABELS)){if(!Array.isArray(p[col])||p[col].length>({buildings:12,workers:200,vehicles:30,tasks:300,containers:30,landscape:300,materials:100,jobs:100,spaces:300}[col]))throw Error('Kayıt sayısı veya liste biçimi geçersiz.');for(const r of p[col]){if(!r||typeof r.id!=='string'||!r.id||used.has(r.id))throw Error('Kayıt kimliği eksik veya tekrarlı.');used.add(r.id);}}
-  for(const col of ['buildings','containers','workers','vehicles','landscape','spaces','tasks','materials','jobs'])p[col]=p[col].map(r=>normalize(p,col,r,r));
+  if(typeof p.id!=='string'||!p.id||ids.has(p.id))throw Error('Proje kimliği geçersiz.');ids.add(p.id);p.name=txt(p.name);if(!p.name)throw Error('Proje adı gerekli.');p.domain=one(p.domain|| (p.id==='business'?'business':'construction'),{business:1,construction:1},'Alan');p.portfolioId=txt(p.portfolioId);if(!root.portfolios.some(f=>f.id===p.portfolioId&&f.domain===p.domain))throw Error('Proje / şirket eşleşmesi geçersiz.');p.city=txt(p.city||'Belirtilmedi',60);p.district=txt(p.district,60);p.address=txt(p.address,240);p.layoutType=one(p.layoutType||'empty',LAYOUTS,'Yerleşke türü');p.spaces??=[];if(input.version===2)p.operations=[];p.operations??=[];date(p.cursor);p.boundary={style:one(p.boundary?.style||'fence',{fence:1,wall:1,hedge:1,line:1},'Sınır'),height:num(p.boundary?.height??1.5,.5,3,'Sınır yüksekliği'),gate:num(p.boundary?.gate??6,2,10,'Kapı genişliği')};p.log=Array.isArray(p.log)?p.log.slice(0,30).map(l=>({at:txt(l.at),message:txt(l.message,180)})):[];
+  const used=new Set();for(const col of Object.keys(LABELS)){if(!Array.isArray(p[col])||p[col].length>({buildings:12,workers:200,vehicles:30,tasks:300,containers:30,landscape:300,materials:100,jobs:100,spaces:300,operations:300}[col]))throw Error('Kayıt sayısı veya liste biçimi geçersiz.');for(const r of p[col]){if(!r||typeof r.id!=='string'||!r.id||used.has(r.id))throw Error('Kayıt kimliği eksik veya tekrarlı.');used.add(r.id);}}
+  for(const col of ['buildings','containers','workers','vehicles','landscape','spaces','tasks','materials','jobs','operations'])p[col]=p[col].map(r=>normalize(p,col,r,r));
  }
  for(const f of root.portfolios)if(!root.projects.some(p=>p.portfolioId===f.id))throw Error('Her proje / şirkette en az bir konum bulunmalı.');if(!ids.has(root.active))throw Error('Aktif proje bulunamadı.');return root;
 }
