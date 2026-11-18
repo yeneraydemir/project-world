@@ -1,6 +1,7 @@
+import {normalizeTrip} from './tracking.js';
 import {TYPES,STAGES,STATES,PRIORITIES,today} from './operations.js';
 import {CATALOG,LAYOUTS,UNITS} from './catalog.js';
-export const VERSION=3, DAY=86400000;
+export const VERSION=4, DAY=86400000;
 export const LABELS={buildings:'Yapılar',landscape:'Peyzaj',containers:'Konteynerler',workers:'Çalışanlar',vehicles:'Araçlar',tasks:'Görevler',materials:'Malzeme',jobs:'İşlemler',spaces:'Bağımsız birimler',operations:'Saha kayıtları'};
 export const KINDS=Object.fromEntries(Object.entries(CATALOG).map(([key,value])=>[key,value.label]));
 export const LAND={pool:'Havuz',lawn:'Çim alan',path:'Yürüyüş yolu',terrace:'Teras',tree:'Ağaç',hedge:'Bitki çiti',fence:'Bahçe çiti',pergola:'Pergola',light:'Aydınlatma',road:'Araç yolu',rack:'Depo rafı',pallet:'Palet'};
@@ -72,6 +73,7 @@ export function normalize(p,col,input,previous=null){
   if(r.vehicleId){const v=p.vehicles.find(v=>v.id===r.vehicleId);if(v.status==='maintenance'&&r.status!=='delivered')throw Error('Araç bakımda.');if(r.quantity>v.capacity)throw Error('Yük araç kapasitesini aşıyor.');if(r.status!=='delivered'&&p.jobs.some(j=>j.id!==r.id&&j.vehicleId===v.id&&j.status!=='delivered'))throw Error('Araçta başka bir açık görev var.');}
   if(['ready','transit','delivered'].includes(r.status)&&r.loaded<r.quantity)throw Error('Yük / işlem tamamlanmadan bu aşamaya geçilemez.');
  }
+ if(col==='jobs'||col==='operations')r.trip=normalizeTrip(r.trip);
  return r;
 }
 export function put(p,col,input){
@@ -143,7 +145,7 @@ export function initial(){
  const root={version:VERSION,projects:[a,b,c,v,vill,biz],active:'construction-1'};ensureHierarchy(root);return root;
 }
 export function validate(input){
- if(!input||![2,VERSION].includes(input.version)||!Array.isArray(input.projects)||input.projects.length<1||input.projects.length>100)throw Error('Project World v2 veya v3 dünya JSON dosyası gerekli. Eski v1 dosyaları bu sürüme doğrudan aktarılamaz.');
+ if(!input||![2,3,VERSION].includes(input.version)||!Array.isArray(input.projects)||input.projects.length<1||input.projects.length>100)throw Error('Project World v2, v3 veya v4 dünya JSON dosyası gerekli. Eski v1 dosyaları bu sürüme doğrudan aktarılamaz.');
  const root=clone(input),ids=new Set();root.version=VERSION;ensureHierarchy(root);
  for(const p of root.projects){
   if(typeof p.id!=='string'||!p.id||ids.has(p.id))throw Error('Proje kimliği geçersiz.');ids.add(p.id);p.name=txt(p.name);if(!p.name)throw Error('Proje adı gerekli.');p.domain=one(p.domain|| (p.id==='business'?'business':'construction'),{business:1,construction:1},'Alan');p.portfolioId=txt(p.portfolioId);if(!root.portfolios.some(f=>f.id===p.portfolioId&&f.domain===p.domain))throw Error('Proje / şirket eşleşmesi geçersiz.');p.city=txt(p.city||'Belirtilmedi',60);p.district=txt(p.district,60);p.address=txt(p.address,240);p.layoutType=one(p.layoutType||'empty',LAYOUTS,'Yerleşke türü');p.spaces??=[];if(input.version===2)p.operations=[];p.operations??=[];date(p.cursor);p.boundary={style:one(p.boundary?.style||'fence',{fence:1,wall:1,hedge:1,line:1},'Sınır'),height:num(p.boundary?.height??1.5,.5,3,'Sınır yüksekliği'),gate:num(p.boundary?.gate??6,2,10,'Kapı genişliği')};p.log=Array.isArray(p.log)?p.log.slice(0,30).map(l=>({at:txt(l.at),message:txt(l.message,180)})):[];
