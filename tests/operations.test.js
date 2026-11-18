@@ -6,7 +6,7 @@ import * as K from '../dist/kapsio.js';
 const fixture=()=>{const root=D.initial(),p=root.projects[0];return {root,p,buildingId:p.buildings[0].id};};
 test('v2 migration adds independent operational collection without deleting old tasks',()=>{
  const {root,p}=fixture();root.version=2;delete p.operations;
- const next=D.validate(root);assert.equal(next.version,3);assert.deepEqual(next.projects[0].operations,[]);assert.deepEqual(next.projects[0].tasks,p.tasks);
+ const next=D.validate(root);assert.equal(next.version,4);assert.deepEqual(next.projects[0].operations,[]);assert.deepEqual(next.projects[0].tasks,p.tasks);
 });
 test('receipt posts stock exactly once and locks the credited quantity',()=>{
  const {p,buildingId,root}=fixture(),m=p.materials[0],before=m.stock;
