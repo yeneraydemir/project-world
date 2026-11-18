@@ -1,3 +1,5 @@
+import * as TR from './tracking.js';
+import {openTurkeyMap} from './turkey-map.js';
 import * as K from './kapsio.js';
 import * as O from './operations.js';
 import {CATALOG,FAMILIES,LAYOUTS,LAYOUT_HELP,UNITS,BUSINESS_ROLES} from './catalog.js';
@@ -82,6 +84,8 @@ function renderDetail(){
    if(r.status==='transit')html+=button('Örnek konumu %25 ilerlet','job-advance','gold');
    html+=button(route?'Tesis görünümüne dön':'Şematik rotayı göster','route')+'<p class="detail-copy">Konum, yol ve mesafe örnek plan verisidir. Araç kendiliğinden gerçek konum bildirmez. Görünen kutular işlem adedini temsil eder.</p>';
   }
+  if((selected.col==='jobs'&&r.type!=='production')||(selected.col==='operations'&&r.type==='delivery'))html+=button(r.trip?'Rota ve saatleri düzenle':'Rota ve saat ekle','trip','gold');
+  if(r.trip)html+=kv([['Kalkış (Türkiye)',r.trip.departure.replace('T',' ')],['Tahmini varış',r.trip.arrival.replace('T',' ')]]);
   if(['buildings','spaces','landscape'].includes(selected.col)){
    const list=p.operations.filter(o=>selected.col==='spaces'?o.spaceId===r.id:selected.col==='landscape'?o.stage==='pool'&&o.buildingId===r.buildingId:o.buildingId===r.id);
    if(selected.col!=='landscape'||r.type==='pool'&&r.buildingId)html+='<h3>Bağlı saha kayıtları · '+list.length+'</h3>'+list.map(o=>linkRecord('operations',o)).join('')+button('Bu konuma saha kaydı ekle','op-add');
@@ -103,6 +107,7 @@ function renderDetail(){
 function scenarioText(){const base=D.metrics(root.projects.find(q=>q.id===project().id)),now=D.metrics(project()),needed=Math.round(base.production*demand/100);return 'Talep '+needed+' adet/sa; senaryo kapasitesi '+now.production+' adet/sa. '+(now.production>=needed?'Kapasite yeterli.':'Kapasite açığı '+(needed-now.production)+' adet/sa.');}
 function act(action){
  const p=project(),r=selectedRecord();
+ if(action==='trip')return tripForm();
  if(action==='location-edit')return locationForm(true);if(action==='portfolio')return portfolioOverview();if(action==='kapsio')return kapsioPanel();
  if(action==='op-add')return operationForm(null,{buildingId:selected?.col==='buildings'?r.id:r?.buildingId,spaceId:selected?.col==='spaces'?r.id:null,type:selected?.col==='spaces'||domain()==='business'?'maintenance':'stage',stage:selected?.col==='landscape'?'pool':undefined});
  if(action==='accept-delivery')return confirmDialog('Teslim al ve stoğa ekle?',r.name+' için bir kez stok girişi yapılacak.',()=>mutate(p=>D.acceptDelivery(p,r.id)));
@@ -197,6 +202,7 @@ function tick(dt){if(rate&&!plotting&&!$('#dialog').open){const p=project(),boun
 $('#project').onchange=e=>chooseProject(e.target.value);$('#portfolio').onchange=e=>{cityFilter='';chooseProject(root.projects.find(p=>p.portfolioId===e.target.value)?.id);};$('#city-filter').onchange=e=>{cityFilter=e.target.value;const site=root.projects.find(p=>p.portfolioId===project().portfolioId&&(!cityFilter||p.city===cityFilter));chooseProject(site?.id);};$('#kind-filter').onchange=e=>{if(view==='spaces')unitFilter=e.target.value;else kindFilter=e.target.value;renderRecords();};$('#portfolio-summary').onclick=portfolioOverview;document.querySelectorAll('[data-domain]').forEach(b=>b.onclick=()=>{cityFilter='';chooseProject(root.projects.find(p=>p.domain===b.dataset.domain)?.id);});
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{cancelPlot();rate=0;selected=null;interior=null;route=false;const next=b.dataset.mode;if(next==='scenario'&&!draft){draft=D.clone(root);draft.active=root.active;}mode=next;view=next==='operations'?'jobs':'buildings';group=next==='operations'?'work':'area';detailMode=next==='scenario'?'scenario':null;render();});
 $('#quick-add').onclick=()=>{dismissBrowser();if(view==='buildings')beginPlot();else if(Object.hasOwn(D.LABELS,view))edit(view);};
+$('#turkey-map').onclick=showMap;
 $('#add-main').onclick=()=>{dismissBrowser();addMenu();};$('#search').oninput=e=>{search=e.target.value.toLocaleLowerCase('tr-TR');renderRecords();};
 $('#today-toggle').onclick=()=>{dismissBrowser();cancelPlot();selected=null;detailMode=detailMode==='today'?null:'today';renderDetail();};
 $('#summary-toggle').onclick=()=>{selected=null;detailMode=['summary','scenario'].includes(detailMode)?null:mode==='scenario'?'scenario':'summary';renderDetail();};
@@ -355,4 +361,29 @@ function kapsioPanel(){
  $('#kapsio-template').onclick=()=>downloadJSON('Kapsio-Aktarim-Sablonu.json',{format:K.FORMAT,locationId:p.id,workers:[],vehicles:[],materials:[],
   examples:{workers:[{externalId:'EMP-001',firstName:'Örnek',lastName:'Çalışan',role:'Sürücü'}],vehicles:[{externalId:'VH-001',plate:'06 PW 001',type:'truck',capacity:24,status:'active',driverExternalId:'EMP-001'}],materials:[{externalId:'MAT-001',name:'Örnek malzeme',unit:'adet',stock:20,minimum:5}]}});
  $('#kapsio-export').onclick=()=>downloadJSON('Project-World-Kapsio-Saha.json',K.exportOperations(p));
+}
+
+function tripEntries(){
+ const p=project();
+ return world().projects.filter(q=>q.portfolioId===p.portfolioId).flatMap(q=>['jobs','operations'].flatMap(col=>q[col].filter(r=>r.trip&&(col==='jobs'?r.type!=='production':r.type==='delivery')).map(r=>({project:q,record:r,col}))));
+}
+function showMap(){
+ rate=0;dismissBrowser();openTurkeyMap(tripEntries(),selected?.id,entry=>{
+  if(entry.project.id!==project().id){if(mode==='scenario')draft.active=entry.project.id;else chooseProject(entry.project.id);}
+  select({col:entry.col,id:entry.record.id});tripForm();
+ });
+}
+function tripForm(){
+ const record=selectedRecord(),col=selected?.col;if(!record)return toast('Önce bir sevkiyat veya malzeme teslimatı seç.');
+ if(!record.vehicleId)return toast('Rota takibi için önce kayda bir araç ata.');
+ const originalProject=project().id;
+ const cities=Object.keys(TR.CITIES).sort((a,b)=>a.localeCompare(b,'tr')).map(n=>[n,n]);
+ const defaults=record.trip||{from:TR.CITIES[project().city]?project().city:'Ankara',to:'İstanbul',departure:TR.localNow(),arrival:TR.localNow(Date.now()+6*3600000)};
+ modal('Sevkiyat rotası ve saatleri',sel('from','Kalkış şehri',cities,defaults.from)+sel('to','Varış şehri',cities,defaults.to)+inp('departure','Kalkış · Türkiye saati',defaults.departure,'datetime-local')+inp('arrival','Tahmini varış · Türkiye saati',defaults.arrival,'datetime-local')+'<p class="detail-copy full">Araç, kalkış ve varış arasında yol çizgisinde zamana göre ilerler. Şehir merkezleri kullanılır. Canlı GPS, trafik ve tır kısıtları hesaplanmaz. Rota isteğinde yalnızca iki şehir koordinatı OSRM servisine gönderilir.</p>','',async input=>{
+  TR.instant(input.departure);TR.instant(input.arrival);if(TR.instant(input.arrival)<=TR.instant(input.departure))throw Error('Varış kalkıştan sonra olmalı.');
+  const form=$('#form');let geometry=record.trip&&input.from===record.trip.from&&input.to===record.trip.to?record.trip:await TR.roadRoute(input.from,input.to);
+  if(!form.isConnected||!$('#dialog').open||project().id!==originalProject)return false;
+  const ok=mutate(p=>D.put(p,col,{...record,trip:TR.normalizeTrip({...input,...geometry,departure:input.departure,arrival:input.arrival})}));
+  if(ok){$('#dialog').close();showMap();}return false;
+ },'Rotayı kaydet');
 }
