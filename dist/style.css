@@ -278,3 +278,18 @@ body { background: radial-gradient(ellipse at 15% 0%, #dce7ff, transparent 50%),
 .turkey-canvas svg{width:100%;height:auto;display:block}
 #turkey-dialog .note{font-size:11px;line-height:1.5}
 @media(max-width:750px){#turkey-dialog .turkey-layout{grid-template-columns:1fr}.scene-actions{flex-wrap:wrap}.scene-heading{top:118px}.stats{top:180px}}
+
+.province-toolbar{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0}
+.province-toolbar>label{flex:1;min-width:190px}.map-zoom{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.map-zoom button{min-height:38px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.map-zoom label{display:flex;gap:5px;align-items:center}.map-zoom input{width:auto;min-height:0;margin:0}
+.turkey-canvas svg{touch-action:none;cursor:grab;min-height:260px}.turkey-canvas svg:active{cursor:grabbing}
+.province-shape{fill:#edf3ee;stroke:#7993a9;stroke-width:1;vector-effect:non-scaling-stroke;fill-rule:evenodd;cursor:pointer}
+.province-shape:nth-child(3n){fill:#e3edf6}.province-shape:nth-child(3n + 1){fill:#f3f0e6}
+.province-shape:hover,.province-shape:focus-visible{fill:#bed2f9;stroke:#2356cc;outline:none;stroke-width:2}
+.province-shape.selected{fill:#bed2f9;stroke:#163fa4;stroke-width:2}
+.province-code{text-anchor:middle;font-size:7px;font-weight:700;fill:#264363;paint-order:stroke;stroke:#fff;stroke-width:1.2;pointer-events:none}
+.province-name{display:none;text-anchor:middle;font-size:6px;fill:#172b47;paint-order:stroke;stroke:#fff;stroke-width:1;pointer-events:none}
+.show-names .province-name{display:block}
+#turkey-route,#turkey-truck{pointer-events:none}
+#province-info{border-bottom:1px solid var(--line);padding-bottom:8px;margin:12px 0}
