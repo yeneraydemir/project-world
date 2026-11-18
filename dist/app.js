@@ -1,3 +1,4 @@
+import * as API from './shipment-api.js';
 import * as TR from './tracking.js';
 import {openTurkeyMap} from './turkey-map.js';
 import * as K from './kapsio.js';
@@ -19,7 +20,7 @@ function mutate(fn){const before=D.clone(world());try{fn(project());const valid=
 function undo(){const h=mode==='scenario'?scenarioHistory:history;if(!h.length)return toast('Geri alınacak değişiklik yok.');setWorld(h.pop());selected=null;detailMode=null;rate=0;if(mode!=='scenario')persist();render();toast('Son değişiklik geri alındı.');}
 function chooseProject(key){if(!root.projects.some(p=>p.id===key))return toast('Konum bulunamadı.');kindFilter='';cancelPlot();rate=0;interior=null;selected=null;detailMode=null;route=false;search='';$('#search').value='';root.active=key;if(cityFilter&&root.projects.find(p=>p.id===key).city!==cityFilter)cityFilter='';mode='edit';draft=null;view='buildings';group='area';persist();render();scene?.overview();}
 function select(record){cancelPlot();selected=record;detailMode=null;view=record.col;group=['buildings','spaces','landscape','containers'].includes(view)?'area':['workers','vehicles'].includes(view)?'team':'work';dismissBrowser();render();const r=selectedRecord();if(r?.x!=null)scene?.focus(r);else if(r?.buildingId)scene?.focus(project().buildings.find(b=>b.id===(r.targetId||r.buildingId)));$('#inspector').scrollTop=0;}
-function groups(){return {area:{name:'Alan',symbol:'▤',views:['buildings','spaces','landscape','containers']},team:{name:'Ekip',symbol:'♙',views:['workers','vehicles']},work:{name:'İşler',symbol:'☷',views:domain()==='business'?['operations','jobs','tasks','materials','alerts']:['operations','tasks','materials','alerts']}};}
+function groups(){return {area:{name:'Alan',symbol:'▤',views:['buildings','spaces','landscape','containers']},team:{name:'Ekip',symbol:'♙',views:['workers','vehicles']},work:{name:'İşler',symbol:'☷',views:domain()==='business'?['operations','jobs','tasks','materials','alerts']:['operations','jobs','tasks','materials','alerts']}};}
 function tab(next){view=next;selected=null;detailMode=null;search='';$('#search').value='';render();}
 function render(){
  const p=project();cursor=D.date(p.cursor);const portfolios=root.portfolios.filter(f=>f.domain===p.domain);$('#portfolio').innerHTML=portfolios.map(f=>'<option value="'+esc(f.id)+'">'+esc(f.name)+'</option>').join('');$('#portfolio').value=p.portfolioId;const locations=root.projects.filter(x=>x.domain===p.domain&&x.portfolioId===p.portfolioId),cities=[...new Set(locations.map(x=>x.city))];if(cityFilter&&!cities.includes(cityFilter))cityFilter='';$('#city-filter').innerHTML='<option value="">Tüm şehirler</option>'+cities.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');$('#city-filter').value=cityFilter;$('#city-filter').hidden=cities.length<2;const choices=locations.filter(x=>!cityFilter||x.city===cityFilter);const total=D.portfolioStats(root,p.portfolioId);$('#portfolio-summary').textContent=total.cities+' şehir · '+total.locations+' konum · '+total.wholeBuildings+' tam bina · '+total.units+' birim ↗';
@@ -371,7 +372,7 @@ function showMap(){
  rate=0;dismissBrowser();openTurkeyMap(tripEntries(),selected?.id,entry=>{
   if(entry.project.id!==project().id){if(mode==='scenario')draft.active=entry.project.id;else chooseProject(entry.project.id);}
   select({col:entry.col,id:entry.record.id});tripForm();
- });
+ },mapShipmentForm,apiConnectionForm,syncMapShipment);
 }
 function tripForm(){
  const record=selectedRecord(),col=selected?.col;if(!record)return toast('Önce bir sevkiyat veya malzeme teslimatı seç.');
@@ -386,4 +387,54 @@ function tripForm(){
   const ok=mutate(p=>D.put(p,col,{...record,trip:TR.normalizeTrip({...input,...geometry,departure:input.departure,arrival:input.arrival})}));
   if(ok){$('#dialog').close();showMap();}return false;
  },'Rotayı kaydet');
+}
+
+function apiConnectionForm(){
+ modal('Kapsio API bağlantısı',
+ '<p class="detail-copy full">Bağlantı henüz doğrulanmadı. Bu ekran, Project World sevkiyat sözleşmesini kabul eden bir Kapsio uç noktası içindir. Anahtar yalnız bu açık sekmenin belleğinde tutulur; yedeğe yazılmaz. Tarayıcıdan erişim için Kapsio CORS izni gerekir.</p>'+
+ inp('endpoint','Kapsio sevkiyat oluşturma URL','', 'url')+inp('token','Oturumluk erişim anahtarı','','password','autocomplete="off"')+
+ '<button type="button" id="api-disconnect">Bu oturumdaki bağlantıyı kaldır</button>',
+ '',input=>{API.configureApi(input.endpoint,input.token);toast('Bağlantı bilgileri oturuma alındı. İlk gönderim yanıtıyla doğrulanacak.');return true;},'Bağlantıyı hazırla');
+ $('#api-disconnect').onclick=()=>{API.clearApi();$('#dialog').close();toast('API bağlantısı kaldırıldı.');};
+}
+async function syncMapShipment(entry){
+ if(mode==='scenario')return toast('Senaryo kayıtları Kapsio’ya gönderilemez.');
+ if(!API.apiReady())return apiConnectionForm();
+ if(entry.col!=='jobs')return toast('API gönderimi yalnız sevkiyat kayıtları için hazır.');
+ const p=root.projects.find(p=>p.id===entry.project.id),r=p?.jobs.find(r=>r.id===entry.record.id);
+ if(!r)return toast('Sevkiyat bulunamadı.');
+ if(r.kapsio?.id)return toast('Kapsio kaydı daha önce onaylandı: '+r.kapsio.id);
+ confirmDialog('Sevkiyatı Kapsio’ya gönder',r.name+' kaydının plaka, sürücü, yük ve zaman bilgileri yapılandırdığın Kapsio API adresine gönderilecek.',async()=>{
+  const receipt=await API.sendShipment(p,r);
+  const current=root.projects.find(q=>q.id===p.id)?.jobs.find(j=>j.id===r.id);
+  if(!current)throw Error('Yerel kayıt bulunamadı; API kaydını kontrol et.');
+  current.kapsio=receipt;D.log(p,'Kapsio sevkiyat kaydı onaylandı: '+receipt.id);persist();render();
+  toast('Kapsio kayıt kimliği alındı: '+receipt.id);return true;
+ },'Gönder');
+}
+function mapShipmentForm(provinceName=''){
+ const p=project();if(!p.vehicles.length)return toast('Sevkiyat oluşturmak için Ekip → Araçlar bölümünden önce bir araç ekle.');
+ if(!p.buildings.length)return toast('Önce sevkiyatın bağlı olduğu bir yapı / tesis ekle.');
+ const cities=Object.keys(TR.CITIES).sort((a,b)=>a.localeCompare(b,'tr')).map(n=>[n,n]);
+ const from=Object.keys(TR.CITIES).find(n=>n.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()===provinceName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase())||(TR.CITIES[p.city]?p.city:'Ankara');
+ const originalProject=p.id;
+ modal('Haritadan yeni sevkiyat',
+ inp('name','Sevkiyat adı','')+sel('buildingId','Bağlı tesis / yapı',p.buildings.map(b=>[b.id,b.name]),p.buildings[0].id)+
+ sel('vehicleId','Araç / plaka',p.vehicles.filter(v=>v.status==='active').map(v=>[v.id,v.plate]),'')+
+ inp('cargo','Yük açıklaması','')+inp('quantity','Miktar (araç kapasite biriminde)',1,'number','min="1" max="500" step="1"')+
+ inp('cargoUnit','Yük birimi','adet')+sel('from','Kalkış şehri',cities,from)+sel('to','Varış şehri',cities,from==='İstanbul'?'Ankara':'İstanbul')+
+ inp('departure','Kalkış · Türkiye saati',TR.localNow(),'datetime-local')+inp('arrival','Tahmini varış · Türkiye saati',TR.localNow(Date.now()+6*3600000),'datetime-local')+
+ '<p class="note full">Sevkiyat planlandı olarak kaydedilir; yükleme ve teslim durumu ayrıca yönetilir. Araç konumu, girilen saatlere göre planlanan ilerlemeyi gösterir. Kapsio’ya gönderim haritadaki düğmeyle yapılır.</p>',
+ '',async input=>{
+  TR.instant(input.departure);if(TR.instant(input.arrival)<=TR.instant(input.departure))throw Error('Varış kalkıştan sonra olmalı.');
+  if(!input.vehicleId)throw Error('Aktif araç seç.');
+  const form=$('#form'),road=await TR.roadRoute(input.from,input.to);
+  if(!form.isConnected||!$('#dialog').open||project().id!==originalProject)return false;
+  const trip=TR.normalizeTrip({...input,...road});
+  const ok=mutate(p=>{
+   const r=D.put(p,'jobs',{name:input.name,type:'shipment',buildingId:input.buildingId,vehicleId:input.vehicleId,quantity:Number(input.quantity),cargo:input.cargo.slice(0,180),cargoUnit:input.cargoUnit.slice(0,20),loaded:0,status:'planned',route:'istanbul',progress:0,due:input.arrival.slice(0,10),trip});
+   selected={col:'jobs',id:r.id};
+  });
+  if(ok){$('#dialog').close();showMap();}return false;
+ },'Sevkiyatı oluştur');
 }
