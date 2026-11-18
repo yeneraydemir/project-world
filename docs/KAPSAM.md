@@ -79,3 +79,9 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 ### Cam yüzeyli çalışma alanı
 - Kayıt paneli masaüstünde ve mobilde sahne üzerinden açılıp kapanır. Açık kategorideki yeni kayıt yan panelden tek tıkla başlatılır; genel ekleme menüsü Alan, Ekip ve İşler olarak gruplanır.
 - Açık renk cam yüzeyler, okunaklı metin ve saydamlığı azaltan sistem tercihleri için opak görünüm. Saha verileri ve kayıt biçimi değişmedi.
+
+### Türkiye sevkiyat haritası — v4
+- 81 il merkezi arasındaki OSRM yol rotası, kalkış ve tahmini varış (Türkiye +03) ile sevkiyata / malzeme teslimatına bağlanır. Aynı proje/şirketin konumlarındaki rotalar harita seçiminde birlikte gösterilir.
+- Plaka, sürücü, rota mesafesi, kalan süre ve yol üzerinde zamanla ilerleyen araç simgesi. İlerleme takvim animasyonundan bağımsızdır, gerçek saatten hesaplanır.
+- Kaydedilmiş rota çevrimdışı görüntülenir; yeni rota için OSRM internet erişimi gerekir. Servis çalışmazsa kayıt yapılmaz; düz çizgi gerçek yol diye sunulmaz. Yalnız iki şehir merkezi koordinatı gönderilir.
+- Harita Natural Earth 110m ülke geometrisidir: https://github.com/nvkelso/natural-earth-vector (public domain). Yollar OSRM / OpenStreetMap (ODbL). Canlı GPS, trafik ve tır kısıtları yoktur. V2/v3 kayıtları V4'e taşınır.
