@@ -1,5 +1,5 @@
 import {mapPoint,mountTiles} from './map-tiles.js';
-import {CITIES,position} from './tracking.js';
+import {CITIES,position,vehiclePose} from './tracking.js';
 import {geometryPath,bounds,matchesProvince,canonical} from './provinces.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const xy=mapPoint;
@@ -30,9 +30,10 @@ export function openTurkeyMap(entries,selectedId,onEdit,onCreate,onApi,onSync){
   if(!current){info.innerHTML='<p class="empty">Bu görünümde rotalı sevkiyat yok.</p>';d.querySelector('#turkey-route').innerHTML='';d.querySelector('#turkey-truck').innerHTML='';return;}
   const e=current,r=e.record,t=r.trip,v=e.project.vehicles.find(v=>v.id===r.vehicleId),driver=e.project.workers.find(w=>w.id===v?.driverId),state=position(t);
   d.querySelector('#turkey-route').innerHTML='<path d="'+path(t.coordinates)+'" fill="none" stroke="#fff" stroke-width="7" vector-effect="non-scaling-stroke"/><path d="'+path(t.coordinates)+'" fill="none" stroke="#2356cc" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
-  const [x,y]=xy(state.point),scale=box[2]/1030;
-  d.querySelector('#turkey-truck').innerHTML='<g transform="translate('+x+','+y+') scale('+scale+')"><circle r="13" fill="#2356cc" stroke="white" stroke-width="3"/><path d="M-7-4H2V3H-7ZM2-2H5L8 1V3H2" fill="white"/><circle cx="-4" cy="5" r="2" fill="white"/><circle cx="5" cy="5" r="2" fill="white"/></g>';
-  info.innerHTML='<h3>'+esc(t.from)+' → '+esc(t.to)+'</h3><span class="tag">'+esc(state.state)+'</span><dl class="kv">'+[['Kapsio',r.kapsio?.id?'Kayıt onaylandı: '+r.kapsio.id:'Gönderilmedi'],['Plaka',v?.plate||'Araç atanmadı'],['Sürücü',driver?.name||'Atanmadı'],['Kalkış (Türkiye)',t.departure.replace('T',' ')],['Tahmini varış',t.arrival.replace('T',' ')],['Plan ilerlemesi','%'+Math.round(state.f*100)],['Rota',Math.round(t.distance/1000)+' km'],['Kalan süre',Math.max(0,Math.ceil((Date.parse(t.arrival+':00+03:00')-Date.now())/60000))+' dk']].map(([k,v])=>'<div><dt>'+k+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>';
+  const truck=d.querySelector('#turkey-truck');
+  if(!truck.firstElementChild)truck.innerHTML='<g class="map-vehicle" aria-label="Planlanan araç konumu"><ellipse cx="1" cy="6" rx="23" ry="10" fill="#132d4b44"/><g class="truck-heading"><path d="M-20-8H5V6H-20Z" fill="#dbe8ff" stroke="#244e87" stroke-width="1"/><path d="M-20 6H5V11H-20Z" fill="#7398c4"/><path d="M5-7H13L20 0V7H5Z" fill="#2d6ee2" stroke="#1b4ca2"/><path d="M6-5H12L16-1H6Z" fill="#a7e3ff"/><path d="M5 7H20V11H5Z" fill="#164b9b"/><path d="M-17-5H2M-17-2H2M-17 1H2" stroke="#a4bddc" stroke-width=".7"/><ellipse cx="-13" cy="11" rx="3" ry="4" fill="#1b2635"/><ellipse cx="12" cy="11" rx="3" ry="4" fill="#1b2635"/><path d="M18 3H21V6H18" fill="#fff3b0"/></g></g>';
+  animateVehicle();
+  info.innerHTML='<h3>'+esc(t.from)+' → '+esc(t.to)+'</h3><span class="tag">'+esc(state.state)+'</span><dl class="kv">'+[['Kapsio',r.kapsio?.id?'Kayıt onaylandı: '+r.kapsio.id:r.apiPending?'Otomatik gönderim bekliyor':'Gönderilmedi'],['Plaka',v?.plate||'Araç atanmadı'],['Sürücü',driver?.name||'Atanmadı'],['Kalkış (Türkiye)',t.departure.replace('T',' ')],['Tahmini varış',t.arrival.replace('T',' ')],['Plan ilerlemesi','%'+Math.round(state.f*100)],['Rota',Math.round(t.distance/1000)+' km'],['Kalan süre',Math.max(0,Math.ceil((Date.parse(t.arrival+':00+03:00')-Date.now())/60000))+' dk']].map(([k,v])=>'<div><dt>'+k+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>';
  }
  function choose(code){
   active=features.find(f=>f.properties.il_kodu===code)||null;provinceSelect.value=active?code:'';
@@ -65,9 +66,19 @@ export function openTurkeyMap(entries,selectedId,onEdit,onCreate,onApi,onSync){
  svg.addEventListener('pointercancel',()=>{drag=null;});
  svg.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const target=e.target.closest('[data-province]');if(target){e.preventDefault();choose(target.dataset.province);}}});
  svg.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.15:.85);draw();},{passive:false});
+ let frame=0;
+ const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ function animateVehicle(){
+  if(!current)return;
+  const pose=vehiclePose(current.record.trip),[x,y]=xy(pose.point),scale=box[2]/1030;
+  const vehicle=d.querySelector('.map-vehicle');
+  vehicle?.setAttribute('transform','translate('+x+','+y+') scale('+scale+')');
+  d.querySelector('.truck-heading')?.setAttribute('transform','rotate('+pose.angle+')');
+ }
+ function motion(){if(!d.open)return;animateVehicle();if(!reduced)frame=requestAnimationFrame(motion);}
  const timer=setInterval(()=>{if(d.open)draw();},1000);
- d.addEventListener('close',()=>{clearInterval(timer);tiles.destroy();d.remove();},{once:true});
- fillTrips(selectedId);d.showModal();choose('');
+ d.addEventListener('close',()=>{clearInterval(timer);cancelAnimationFrame(frame);tiles.destroy();d.remove();},{once:true});
+ fillTrips(selectedId);d.showModal();choose('');motion();
  dataPromise??=fetch('./maps/provinces.json').then(r=>{if(!r.ok)throw Error();return r.json();}).catch(()=>{dataPromise=null;throw Error();});
  labelsPromise??=fetch('./maps/labels.json').then(r=>{if(!r.ok)throw Error();return r.json();});
  Promise.all([dataPromise,labelsPromise]).then(([g,labels])=>{labelPositions=labels;
