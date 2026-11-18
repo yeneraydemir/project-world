@@ -304,3 +304,18 @@ body { background: radial-gradient(ellipse at 15% 0%, #dce7ff, transparent 50%),
 .province-name{font-size:5.5px}
 .map-create-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 #map-sync{margin:9px 0;max-width:100%}
+
+/* Province interactions must never paint a blue polygon or bounding box. */
+#turkey-land .province-shape,
+#turkey-land .province-shape:hover,
+#turkey-land .province-shape:active,
+#turkey-land .province-shape:focus,
+#turkey-land .province-shape:focus-visible,
+#turkey-land .province-shape.selected{
+ fill:transparent!important;stroke:#697a8866!important;stroke-width:.8!important;
+ outline:none!important;box-shadow:none!important;
+}
+#turkey-land .province-shape:focus-visible{stroke:#343f49!important;stroke-dasharray:3 2}
+.turkey-canvas{position:relative}
+.osm-attribution{position:absolute;right:3px;bottom:3px;font-size:10px;padding:3px 5px;background:#fffffff0;color:#243f55;z-index:2;border-radius:3px}
+#map-land-status:not(:empty){position:relative;margin:0;background:#fff5df;color:#765414;padding:7px;font-size:11px}
