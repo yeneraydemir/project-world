@@ -37,3 +37,9 @@ export async function roadRoute(from,to){
  return {coordinates:route.geometry.coordinates,distance:route.distance,duration:route.duration};
 }
 export const localNow=(t=Date.now())=>new Date(t+10800000).toISOString().slice(0,16);
+
+export function vehiclePose(trip,now=Date.now()){
+ const current=position(trip,now),a=position(trip,now-5000).point,b=position(trip,now+5000).point;
+ const dx=(b[0]-a[0])*Math.cos(current.point[1]*Math.PI/180),dy=-(b[1]-a[1]);
+ return {...current,angle:dx||dy?Math.atan2(dy,dx)*180/Math.PI:0};
+}
