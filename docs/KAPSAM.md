@@ -101,3 +101,8 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 - Eksik Natural Earth çizgi katmanı çalışma anından kaldırıldı. OpenStreetMap raster harita parçaları yalnız görünür alan için, Web Mercator hizalamasıyla yüklenir; tarayıcı önbellek kuralları korunur.
 - İl sınırları, ortalanmış plakalar ve araç rotaları aynı projeksiyonda üst üste gelir. Mavi hover/seçim dolgusu ve SVG kutu odağı kaldırıldı; klavye odağı ince gri kesik çizgiyle belirtilir.
 - Yol haritası internet gerektirir; yüklenemeyen parçalar için kullanıcıya hata gösterilir. Yol haritası kapatılınca il/rota katmanları yerel olarak kullanılabilir.
+
+### Yönlenen araç ve otomatik API gönderimi
+- Harita araç simgesi gölgeli, kabin/kasa/tekerlekli 3D görünümlü SVG modelidir. Yol yönüne döner ve gerçek plan saatine göre animasyon karesiyle ilerler. Canlı GPS değildir.
+- Haritadan oluşturulan yeni sevkiyat API bekleyen işaretiyle kaydedilir. Bağlantı oturumda yapılandırılmışsa otomatik gönderilir; bağlantı daha sonra açılırsa bekleyen yeni kayıtlar gönderilir.
+- API anahtarı yalnız sekme belleğinde olduğundan sekme kapalıyken eşitleme çalışmaz. Kapsio gerçek endpoint ve kimlik doğrulama bilgileri hâlâ eksik; sürekli sunucu eşitlemesi bağlı değildir.
