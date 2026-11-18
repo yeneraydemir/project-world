@@ -271,3 +271,10 @@ body { background: radial-gradient(ellipse at 15% 0%, #dce7ff, transparent 50%),
 @media (prefers-reduced-transparency: reduce) {
   .topbar, .browser, .inspector, .popover, dialog, .scene-actions .soft, .camera-tools, .stat, #scene-status { background: var(--glass); backdrop-filter: none; -webkit-backdrop-filter: none }
 }
+
+#turkey-dialog{width: min(1200px,calc(100vw - 24px))}
+#turkey-dialog .turkey-layout{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:18px}
+.turkey-canvas{min-width:0;align-self:center;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.turkey-canvas svg{width:100%;height:auto;display:block}
+#turkey-dialog .note{font-size:11px;line-height:1.5}
+@media(max-width:750px){#turkey-dialog .turkey-layout{grid-template-columns:1fr}.scene-actions{flex-wrap:wrap}.scene-heading{top:118px}.stats{top:180px}}
