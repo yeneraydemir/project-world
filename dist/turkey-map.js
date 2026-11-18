@@ -3,19 +3,19 @@ import {geometryPath,bounds,matchesProvince,canonical} from './provinces.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const xy=([lon,lat])=>[(lon-25)*48+20,(43-lat)*61+20];
 const path=pts=>pts.map((p,i)=>(i?'L':'M')+xy(p).join(',')).join(' ');
-let dataPromise;
-export function openTurkeyMap(entries,selectedId,onEdit){
+let dataPromise,roadsPromise,labelsPromise;
+export function openTurkeyMap(entries,selectedId,onEdit,onCreate,onApi,onSync){
  document.querySelector('#turkey-dialog')?.close();
  const d=document.createElement('dialog');d.id='turkey-dialog';
  d.innerHTML='<header class="dialog-head"><div><span class="eyebrow">81 İL · SEVKİYAT PLAN TAKİBİ</span><h2>Türkiye haritası</h2></div><button aria-label="Haritayı kapat">×</button></header>'+
  '<p class="detail-copy">Bir ile tıkla veya listeden seç. Sürükleyerek kaydır, tekerlek / ＋ − ile yakınlaştır. Araçlar planlanan saatlere göre ilerler; canlı GPS değildir.</p>'+
- '<div class="province-toolbar"><label>İl ara / seç<select id="province-select"><option value="">Türkiye geneli · 81 il</option></select></label><div class="map-zoom"><button id="map-zoom-in" aria-label="Haritayı yakınlaştır">＋</button><button id="map-zoom-out" aria-label="Haritayı uzaklaştır">−</button><button id="map-reset">Türkiye geneli</button><label><input id="map-labels" type="checkbox"> İl adları</label></div></div>'+
- '<div class="turkey-layout"><div class="turkey-canvas"><svg viewBox="0 0 1030 520" role="group" aria-label="Türkiye illeri ve sevkiyat rotaları"><rect x="-2000" y="-2000" width="5000" height="5000" fill="#e5f2fb"/><g id="turkey-land"></g><g id="turkey-cities" pointer-events="none"></g><g id="turkey-route"></g><g id="turkey-truck"></g></svg><p id="map-land-status" role="status"></p></div><section><div id="province-info" aria-live="polite"></div><label>Sevkiyat<select id="map-trip"></select></label><div id="map-info"></div><button id="map-edit" class="gold">Rota ve saatleri düzenle</button></section></div>'+
+ '<div class="province-toolbar"><label>İl ara / seç<select id="province-select"><option value="">Türkiye geneli · 81 il</option></select></label><div class="map-zoom"><button id="map-zoom-in" aria-label="Haritayı yakınlaştır">＋</button><button id="map-zoom-out" aria-label="Haritayı uzaklaştır">−</button><button id="map-reset">Türkiye geneli</button><label><input id="map-roads" type="checkbox" checked> Ana yollar</label><label><input id="map-labels" type="checkbox"> İl adları</label></div></div>'+
+ '<div class="turkey-layout"><div class="turkey-canvas"><svg viewBox="0 0 1030 520" role="group" aria-label="Türkiye illeri ve sevkiyat rotaları"><rect x="-2000" y="-2000" width="5000" height="5000" fill="#e5f2fb"/><g id="turkey-land"></g><defs><clipPath id="country-mask"></clipPath></defs><g id="turkey-roads" clip-path="url(#country-mask)" pointer-events="none"></g><g id="road-labels" clip-path="url(#country-mask)" pointer-events="none"></g><g id="turkey-cities" pointer-events="none"></g><g id="turkey-route"></g><g id="turkey-truck"></g></svg><p id="map-land-status" role="status"></p></div><section><div class="map-create-actions"><button id="map-create" class="gold">＋ Sevkiyat oluştur</button><button id="map-api" class="soft">Kapsio API</button></div><div id="province-info" aria-live="polite"></div><label>Sevkiyat<select id="map-trip"></select></label><div id="map-info"></div><button id="map-edit" class="soft">Rota ve saatleri düzenle</button><button id="map-sync" class="gold">Kapsio’ya gönder</button></section></div>'+
  (!entries.length?'<p class="empty">Rotalı sevkiyat yok. Araç atanmış sevkiyat veya malzeme teslimatında “Rota ve saat ekle”yi seç.</p>':'')+
- '<p class="note">İl sınırları: OpenStreetMap katkıcıları / cihadturhan/tr-geojson / theaiagent (ODbL, <a href="./maps/ATTRIBUTION.md" target="_blank" rel="noopener">kaynak ve lisans</a>). Yol: OSRM / OpenStreetMap. Genel görselleştirme içindir. Trafik ve tır kısıtları hesaplanmaz; planlanan varış teslimat ve stok kaydını otomatik değiştirmez.</p>';
+ '<p class="note">Ana yol ağı: Natural Earth 1:10m, genelleştirilmiş veri; güncel navigasyon haritası değildir. İl sınırları: OpenStreetMap katkıcıları / cihadturhan/tr-geojson / theaiagent (ODbL, <a href="./maps/ATTRIBUTION.md" target="_blank" rel="noopener">kaynak ve lisans</a>). Yol: OSRM / OpenStreetMap. Genel görselleştirme içindir. Trafik ve tır kısıtları hesaplanmaz; planlanan varış teslimat ve stok kaydını otomatik değiştirmez.</p>';
  document.body.append(d);
  const svg=d.querySelector('svg'),select=d.querySelector('#map-trip'),provinceSelect=d.querySelector('#province-select'),info=d.querySelector('#map-info');
- let features=[],filtered=entries,active=null,current=null,box=[0,0,1030,520],drag=null;
+ let labelPositions={},features=[],filtered=entries,active=null,current=null,box=[0,0,1030,520],drag=null;
  function setBox(b){box=b;svg.setAttribute('viewBox',b.join(' '));}
  function zoom(factor){const w=Math.max(90,Math.min(1030,box[2]*factor)),h=w*520/1030;setBox([Math.max(-100,Math.min(1130-w,box[0]+(box[2]-w)/2)),Math.max(-60,Math.min(580-h,box[1]+(box[3]-h)/2)),w,h]);}
  function fillTrips(preferred){
@@ -24,13 +24,13 @@ export function openTurkeyMap(entries,selectedId,onEdit){
  }
  function draw(){
   current=filtered.find(e=>e.record.id===select.value);
-  select.disabled=!current;d.querySelector('#map-edit').hidden=!current;
+  select.disabled=!current;d.querySelector('#map-edit').hidden=!current;d.querySelector('#map-sync').hidden=!current||current.col!=='jobs';
   if(!current){info.innerHTML='<p class="empty">Bu görünümde rotalı sevkiyat yok.</p>';d.querySelector('#turkey-route').innerHTML='';d.querySelector('#turkey-truck').innerHTML='';return;}
   const e=current,r=e.record,t=r.trip,v=e.project.vehicles.find(v=>v.id===r.vehicleId),driver=e.project.workers.find(w=>w.id===v?.driverId),state=position(t);
   d.querySelector('#turkey-route').innerHTML='<path d="'+path(t.coordinates)+'" fill="none" stroke="#fff" stroke-width="7" vector-effect="non-scaling-stroke"/><path d="'+path(t.coordinates)+'" fill="none" stroke="#2356cc" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
   const [x,y]=xy(state.point),scale=box[2]/1030;
   d.querySelector('#turkey-truck').innerHTML='<g transform="translate('+x+','+y+') scale('+scale+')"><circle r="13" fill="#2356cc" stroke="white" stroke-width="3"/><path d="M-7-4H2V3H-7ZM2-2H5L8 1V3H2" fill="white"/><circle cx="-4" cy="5" r="2" fill="white"/><circle cx="5" cy="5" r="2" fill="white"/></g>';
-  info.innerHTML='<h3>'+esc(t.from)+' → '+esc(t.to)+'</h3><span class="tag">'+esc(state.state)+'</span><dl class="kv">'+[['Plaka',v?.plate||'Araç atanmadı'],['Sürücü',driver?.name||'Atanmadı'],['Kalkış (Türkiye)',t.departure.replace('T',' ')],['Tahmini varış',t.arrival.replace('T',' ')],['Plan ilerlemesi','%'+Math.round(state.f*100)],['Rota',Math.round(t.distance/1000)+' km'],['Kalan süre',Math.max(0,Math.ceil((Date.parse(t.arrival+':00+03:00')-Date.now())/60000))+' dk']].map(([k,v])=>'<div><dt>'+k+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>';
+  info.innerHTML='<h3>'+esc(t.from)+' → '+esc(t.to)+'</h3><span class="tag">'+esc(state.state)+'</span><dl class="kv">'+[['Kapsio',r.kapsio?.id?'Kayıt onaylandı: '+r.kapsio.id:'Gönderilmedi'],['Plaka',v?.plate||'Araç atanmadı'],['Sürücü',driver?.name||'Atanmadı'],['Kalkış (Türkiye)',t.departure.replace('T',' ')],['Tahmini varış',t.arrival.replace('T',' ')],['Plan ilerlemesi','%'+Math.round(state.f*100)],['Rota',Math.round(t.distance/1000)+' km'],['Kalan süre',Math.max(0,Math.ceil((Date.parse(t.arrival+':00+03:00')-Date.now())/60000))+' dk']].map(([k,v])=>'<div><dt>'+k+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>';
  }
  function choose(code){
   active=features.find(f=>f.properties.il_kodu===code)||null;provinceSelect.value=active?code:'';
@@ -50,6 +50,11 @@ export function openTurkeyMap(entries,selectedId,onEdit){
  d.querySelector('#map-reset').onclick=()=>choose('');
  d.querySelector('#map-zoom-in').onclick=()=>{zoom(.7);draw();};
  d.querySelector('#map-zoom-out').onclick=()=>{zoom(1.4);draw();};
+ d.querySelector('#map-create').onclick=()=>{const name=active?.properties.il_adi||'';d.close();onCreate?.(name);};
+ d.querySelector('#map-api').onclick=()=>{d.close();onApi?.();};
+ let syncBusy=false;
+ d.querySelector('#map-sync').onclick=async()=>{if(!current||syncBusy)return;syncBusy=true;const e=current;d.close();try{await onSync?.(e);}finally{syncBusy=false;}};
+ d.querySelector('#map-roads').onchange=e=>{d.querySelector('#turkey-roads').hidden=!e.target.checked;d.querySelector('#road-labels').hidden=!e.target.checked;};
  d.querySelector('#map-labels').onchange=e=>d.querySelector('#turkey-cities').classList.toggle('show-names',e.target.checked);
  d.querySelector('#map-edit').onclick=()=>{if(current){const e=current;d.close();onEdit(e);}};
  svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;drag={x:e.clientX,y:e.clientY,box:[...box],moved:false};svg.setPointerCapture(e.pointerId);});
@@ -62,14 +67,23 @@ export function openTurkeyMap(entries,selectedId,onEdit){
  d.addEventListener('close',()=>{clearInterval(timer);d.remove();},{once:true});
  fillTrips(selectedId);d.showModal();choose('');
  dataPromise??=fetch('./maps/provinces.json').then(r=>{if(!r.ok)throw Error();return r.json();}).catch(()=>{dataPromise=null;throw Error();});
- dataPromise.then(g=>{
+ labelsPromise??=fetch('./maps/labels.json').then(r=>{if(!r.ok)throw Error();return r.json();});
+ Promise.all([dataPromise,labelsPromise]).then(([g,labels])=>{labelPositions=labels;
   if(!d.isConnected)return;
   features=g.features;
+  d.querySelector('#country-mask').innerHTML=features.map(f=>'<path d="'+geometryPath(f.geometry)+'"/>').join('');
   d.querySelector('#turkey-land').innerHTML=features.map(f=>'<path class="province-shape" data-province="'+esc(f.properties.il_kodu)+'" role="button" tabindex="0" aria-pressed="false" aria-label="'+esc(f.properties.il_kodu+' '+f.properties.il_adi)+'" d="'+geometryPath(f.geometry)+'"><title>'+esc(f.properties.il_kodu+' · '+f.properties.il_adi)+'</title></path>').join('');
   d.querySelector('#turkey-cities').innerHTML=features.map(f=>{
-   const n=f.properties.il_adi,key=Object.keys(CITIES).find(k=>canonical(k)===canonical(n)),[x,y]=key?xy(CITIES[key]):(()=>{const [a,b,w,h]=bounds(f.geometry);return [a+w/2,b+h/2];})();
-   return '<text class="province-code" x="'+x+'" y="'+y+'">'+esc(f.properties.il_kodu)+'</text><text class="province-name" x="'+x+'" y="'+(y+8)+'">'+esc(n)+'</text>';
+   const n=f.properties.il_adi,[x,y]=xy(labelPositions[f.properties.il_kodu]);
+   return '<g transform="translate('+x+','+y+')"><rect class="province-plate" x="-7" y="-4.8" width="14" height="9" rx="2"/><text class="province-code" text-anchor="middle" dominant-baseline="central" x="0" y="0">'+esc(f.properties.il_kodu)+'</text></g><text class="province-name" x="'+x+'" y="'+(y+8)+'">'+esc(n)+'</text>';
   }).join('');
   provinceSelect.innerHTML='<option value="">Türkiye geneli · 81 il</option>'+[...features].sort((a,b)=>a.properties.il_adi.localeCompare(b.properties.il_adi,'tr')).map(f=>'<option value="'+esc(f.properties.il_kodu)+'">'+esc(f.properties.il_kodu+' · '+f.properties.il_adi)+'</option>').join('');
+  roadsPromise??=fetch('./maps/roads.json').then(r=>{if(!r.ok)throw Error();return r.json();}).catch(()=>{roadsPromise=null;throw Error();});
+  roadsPromise.then(roads=>{
+   if(!d.isConnected)return;
+   d.querySelector('#turkey-roads').innerHTML=roads.map(r=>'<path class="base-road '+(r.major?'major':'secondary')+'" d="'+path(r.points)+'"/>').join('');
+   const used=new Set();
+   d.querySelector('#road-labels').innerHTML=roads.filter(r=>r.major&&/^E[0-9]+$/.test(r.ref)&&!used.has(r.ref)&&used.add(r.ref)).map(r=>{const [x,y]=xy(r.points[Math.floor(r.points.length/2)]);return '<text class="road-ref" x="'+x+'" y="'+y+'">'+esc(r.ref)+'</text>';}).join('');
+  }).catch(()=>{if(d.isConnected)d.querySelector('#map-land-status').textContent='Ana yol katmanı yüklenemedi.';});
  }).catch(()=>{if(d.isConnected)d.querySelector('#map-land-status').textContent='İl sınırları yüklenemedi. Haritayı kapatıp tekrar aç.';});
 }
