@@ -394,7 +394,7 @@ function apiConnectionForm(){
  '<p class="detail-copy full">Bağlantı henüz doğrulanmadı. Bu ekran, Project World sevkiyat sözleşmesini kabul eden bir Kapsio uç noktası içindir. Anahtar yalnız bu açık sekmenin belleğinde tutulur; yedeğe yazılmaz. Tarayıcıdan erişim için Kapsio CORS izni gerekir.</p>'+
  inp('endpoint','Kapsio sevkiyat oluşturma URL','', 'url')+inp('token','Oturumluk erişim anahtarı','','password','autocomplete="off"')+
  '<button type="button" id="api-disconnect">Bu oturumdaki bağlantıyı kaldır</button>',
- '',input=>{API.configureApi(input.endpoint,input.token);toast('Bağlantı bilgileri oturuma alındı. İlk gönderim yanıtıyla doğrulanacak.');return true;},'Bağlantıyı hazırla');
+ '',input=>{API.configureApi(input.endpoint,input.token);toast('Otomatik gönderim bu sekmede etkin. Bekleyen yeni sevkiyatlar gönderiliyor.');queueMicrotask(sendPendingShipments);return true;},'Bağlantıyı hazırla');
  $('#api-disconnect').onclick=()=>{API.clearApi();$('#dialog').close();toast('API bağlantısı kaldırıldı.');};
 }
 async function syncMapShipment(entry){
@@ -424,7 +424,7 @@ function mapShipmentForm(provinceName=''){
  inp('cargo','Yük açıklaması','')+inp('quantity','Miktar (araç kapasite biriminde)',1,'number','min="1" max="500" step="1"')+
  inp('cargoUnit','Yük birimi','adet')+sel('from','Kalkış şehri',cities,from)+sel('to','Varış şehri',cities,from==='İstanbul'?'Ankara':'İstanbul')+
  inp('departure','Kalkış · Türkiye saati',TR.localNow(),'datetime-local')+inp('arrival','Tahmini varış · Türkiye saati',TR.localNow(Date.now()+6*3600000),'datetime-local')+
- '<p class="note full">Sevkiyat planlandı olarak kaydedilir; yükleme ve teslim durumu ayrıca yönetilir. Araç konumu, girilen saatlere göre planlanan ilerlemeyi gösterir. Kapsio’ya gönderim haritadaki düğmeyle yapılır.</p>',
+ '<p class="note full">Sevkiyat planlandı olarak kaydedilir; yükleme ve teslim durumu ayrıca yönetilir. Araç konumu, girilen saatlere göre planlanan ilerlemeyi gösterir. Kapsio bağlantısı açıksa yeni sevkiyat otomatik gönderilir; kapalıysa gönderim bekler.</p>',
  '',async input=>{
   TR.instant(input.departure);if(TR.instant(input.arrival)<=TR.instant(input.departure))throw Error('Varış kalkıştan sonra olmalı.');
   if(!input.vehicleId)throw Error('Aktif araç seç.');
@@ -432,9 +432,30 @@ function mapShipmentForm(provinceName=''){
   if(!form.isConnected||!$('#dialog').open||project().id!==originalProject)return false;
   const trip=TR.normalizeTrip({...input,...road});
   const ok=mutate(p=>{
-   const r=D.put(p,'jobs',{name:input.name,type:'shipment',buildingId:input.buildingId,vehicleId:input.vehicleId,quantity:Number(input.quantity),cargo:input.cargo.slice(0,180),cargoUnit:input.cargoUnit.slice(0,20),loaded:0,status:'planned',route:'istanbul',progress:0,due:input.arrival.slice(0,10),trip});
+   const r=D.put(p,'jobs',{name:input.name,type:'shipment',buildingId:input.buildingId,vehicleId:input.vehicleId,quantity:Number(input.quantity),apiPending:true,cargo:input.cargo.slice(0,180),cargoUnit:input.cargoUnit.slice(0,20),loaded:0,status:'planned',route:'istanbul',progress:0,due:input.arrival.slice(0,10),trip});
    selected={col:'jobs',id:r.id};
   });
-  if(ok){$('#dialog').close();showMap();}return false;
+  if(ok){$('#dialog').close();showMap();void sendPendingShipments();}return false;
  },'Sevkiyatı oluştur');
+}
+
+let autoSending=false;
+async function sendPendingShipments(){
+ if(autoSending||!API.apiReady()||mode==='scenario')return;
+ autoSending=true;
+ try{
+  const pending=root.projects.flatMap(p=>p.jobs.filter(r=>r.apiPending&&!r.kapsio?.id).map(r=>({p,r})));
+  for(const {p,r} of pending){
+   if(!API.apiReady()||mode==='scenario')break;
+   try{
+    const receipt=await API.sendShipment(p,r);
+    const live=root.projects.find(q=>q.id===p.id)?.jobs.find(j=>j.id===r.id);
+    if(live){live.kapsio=receipt;live.apiPending=false;delete live.apiError;persist();}
+   }catch(e){
+    const live=root.projects.find(q=>q.id===p.id)?.jobs.find(j=>j.id===r.id);
+    if(live){live.apiError='Gönderim tamamlanmadı; bağlantıyı ve Kapsio kaydını kontrol et.';persist();}
+    toast('Kapsio otomatik gönderimi tamamlanmadı. Sevkiyat yerelde korundu.');break;
+   }
+  }
+ }finally{autoSending=false;render();}
 }
