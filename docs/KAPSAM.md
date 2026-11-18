@@ -96,3 +96,8 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 - Plaka rozetlerinin merkezleri il poligonunun içinde en geniş boşluğu veren noktaya hesaplanır; 81 etiketin sınır içinde olması test edilir.
 - Haritadan tesis, araç, yük, kalkış/varış şehri ve saatleriyle sevkiyat oluşturulur. Kayıt normal operasyon listesine eklenir; eski kayıtlar korunur.
 - Kapsio bağlantı ayarı, POST adaptörü, idempotency başlığı ve kayıt kimliğiyle onaylama eklendi. Kapsio uç noktası/dokümanı/erişim bilgisi olmadığı için canlı eşitleme henüz bağlı ve doğrulanmış değildir (docs/KAPSIO-API.md).
+
+### Yol haritası düzeltmesi
+- Eksik Natural Earth çizgi katmanı çalışma anından kaldırıldı. OpenStreetMap raster harita parçaları yalnız görünür alan için, Web Mercator hizalamasıyla yüklenir; tarayıcı önbellek kuralları korunur.
+- İl sınırları, ortalanmış plakalar ve araç rotaları aynı projeksiyonda üst üste gelir. Mavi hover/seçim dolgusu ve SVG kutu odağı kaldırıldı; klavye odağı ince gri kesik çizgiyle belirtilir.
+- Yol haritası internet gerektirir; yüklenemeyen parçalar için kullanıcıya hata gösterilir. Yol haritası kapatılınca il/rota katmanları yerel olarak kullanılabilir.
