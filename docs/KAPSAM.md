@@ -85,3 +85,8 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 - Plaka, sürücü, rota mesafesi, kalan süre ve yol üzerinde zamanla ilerleyen araç simgesi. İlerleme takvim animasyonundan bağımsızdır, gerçek saatten hesaplanır.
 - Kaydedilmiş rota çevrimdışı görüntülenir; yeni rota için OSRM internet erişimi gerekir. Servis çalışmazsa kayıt yapılmaz; düz çizgi gerçek yol diye sunulmaz. Yalnız iki şehir merkezi koordinatı gönderilir.
 - Harita Natural Earth 110m ülke geometrisidir: https://github.com/nvkelso/natural-earth-vector (public domain). Yollar OSRM / OpenStreetMap (ODbL). Canlı GPS, trafik ve tır kısıtları yoktur. V2/v3 kayıtları V4'e taşınır.
+
+### 81 il haritası
+- Yerel ODbL GeoJSON verisinden 81 ilin ayrı poligonları, plaka kodları ve isteğe bağlı il adları.
+- Fare, dokunma veya klavye ile il seçimi, il odaklama, yakınlaştırma, sürükleme ve Türkiye geneline dönme. İl listesi Türkçe sıralıdır.
+- Seçili ilin kalkış, varış ve rota noktası eşleşen sevkiyatları filtrelenir; mevcut saat bazlı araç simgesi devam eder. Resmi sınır/kadastro amaçlı değildir.
