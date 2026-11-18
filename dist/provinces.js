@@ -1,4 +1,5 @@
-export const projectPoint=([lon,lat])=>[(lon-25)*48+20,(43-lat)*61+20];
+import {mapPoint} from './map-tiles.js';
+export const projectPoint=mapPoint;
 export function rings(geometry){return geometry.type==='MultiPolygon'?geometry.coordinates.flat():geometry.coordinates;}
 export function geometryPath(geometry){return rings(geometry).map(r=>r.map((p,i)=>(i?'L':'M')+projectPoint(p).join(',')).join(' ')+'Z').join(' ');}
 export function bounds(geometry){
