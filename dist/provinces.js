@@ -21,3 +21,24 @@ export function matchesProvince(feature,entry){
  const name=canonical(feature.properties.il_adi),t=entry.record.trip;
  return canonical(t.from)===name||canonical(t.to)===name||t.coordinates.some(p=>contains(feature.geometry,p));
 }
+
+// Visual centre: the interior point with the greatest clearance from the boundary.
+export function labelPoint(geometry){
+ const polygons=geometry.type==='MultiPolygon'?geometry.coordinates:[geometry.coordinates];
+ const area=ring=>Math.abs(ring.reduce((sum,p,i)=>{const q=ring[(i+1)%ring.length];return sum+p[0]*q[1]-q[0]*p[1];},0)/2);
+ const poly=[...polygons].sort((a,b)=>area(b[0])-area(a[0]))[0];
+ const xs=poly[0].map(p=>p[0]),ys=poly[0].map(p=>p[1]);
+ let minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),best=null,score=-1;
+ const distance=(p,a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1],t=dx||dy?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy))):0;return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy);};
+ for(let pass=0;pass<3;pass++){
+  const sx=(maxX-minX)/24,sy=(maxY-minY)/24;
+  for(let i=0;i<=24;i++)for(let j=0;j<=24;j++){
+   const p=[minX+i*sx,minY+j*sy];if(!inRing(p,poly[0])||poly.slice(1).some(r=>inRing(p,r)))continue;
+   let clearance=Infinity;for(const ring of poly)for(let k=1;k<ring.length;k++)clearance=Math.min(clearance,distance(p,ring[k-1],ring[k]));
+   if(clearance>score){score=clearance;best=p;}
+  }
+  if(!best)continue;
+  minX=best[0]-sx;maxX=best[0]+sx;minY=best[1]-sy;maxY=best[1]+sy;
+ }
+ return best||poly[0][0];
+}
