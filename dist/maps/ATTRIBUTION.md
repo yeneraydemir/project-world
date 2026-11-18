@@ -13,3 +13,10 @@ https://www.naturalearthdata.com/downloads/10m-cultural-vectors/roads/
 https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_10m_roads.geojson
 Türkiye çevresindeki Major Highway ve Secondary Highway çizgileri alınmış, koordinatlar yuvarlanmış ve çizgiler .006 derece toleransla genelleştirilmiştir.
 Çizgiler haritada il poligonlarıyla kırpılır. Veri güncel navigasyon / yeni otoyol envanteri değildir.
+
+## Güncel görünür yol haritası
+Natural Earth roads.json önceki sürüm varlığı olarak kalır; uygulama artık bu dosyayı yüklemez.
+Yayındaki yol katmanı https://tile.openstreetmap.org/{z}/{x}/{y}.png üzerinden görünür alan için yüklenir.
+© OpenStreetMap contributors — https://www.openstreetmap.org/copyright
+Kullanım politikası: https://operations.osmfoundation.org/policies/tiles/
+Toplu indirme veya çevrimdışı harita paketi sunulmaz; normal tarayıcı önbelleği kullanılır.
