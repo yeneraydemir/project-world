@@ -90,3 +90,9 @@ Bu belge kullanıcıyla alınan kararları korur. Eski uygulamanın dosyaları k
 - Yerel ODbL GeoJSON verisinden 81 ilin ayrı poligonları, plaka kodları ve isteğe bağlı il adları.
 - Fare, dokunma veya klavye ile il seçimi, il odaklama, yakınlaştırma, sürükleme ve Türkiye geneline dönme. İl listesi Türkçe sıralıdır.
 - Seçili ilin kalkış, varış ve rota noktası eşleşen sevkiyatları filtrelenir; mevcut saat bazlı araç simgesi devam eder. Resmi sınır/kadastro amaçlı değildir.
+
+### Haritadan sevkiyat ve ana yol katmanı
+- Natural Earth kaynaklı 228 genelleştirilmiş ana ve bağlantı yol parçası, Türkiye il sınırına kırpılarak çizilir; ana yol etiketleri ve katman anahtarı vardır. Veri güncel tüm otoyol envanteri değildir.
+- Plaka rozetlerinin merkezleri il poligonunun içinde en geniş boşluğu veren noktaya hesaplanır; 81 etiketin sınır içinde olması test edilir.
+- Haritadan tesis, araç, yük, kalkış/varış şehri ve saatleriyle sevkiyat oluşturulur. Kayıt normal operasyon listesine eklenir; eski kayıtlar korunur.
+- Kapsio bağlantı ayarı, POST adaptörü, idempotency başlığı ve kayıt kimliğiyle onaylama eklendi. Kapsio uç noktası/dokümanı/erişim bilgisi olmadığı için canlı eşitleme henüz bağlı ve doğrulanmış değildir (docs/KAPSIO-API.md).
